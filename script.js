@@ -33,11 +33,11 @@ const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY_AQUI';
 let supabase = null;
 
 function initSupabase() {
-  if (!window.supabaseClient || !SUPABASE_URL || SUPABASE_URL.includes('TU_PROYECTO') || SUPABASE_KEY.includes('TU_SUPABASE')) {
+  if (!window.supabase || !SUPABASE_URL || SUPABASE_URL.includes('TU_PROYECTO') || SUPABASE_KEY.includes('TU_SUPABASE')) {
     return;
   }
   try {
-    supabase = window.supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   } catch (e) {
     console.error('Error inicializando Supabase:', e);
   }
