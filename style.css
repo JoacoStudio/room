@@ -341,6 +341,105 @@ body.dark-mode #clock {
   color: #888888;
 }
 
+/* ---------- Dark mode ---------- */
+
+body.dark-mode {
+  background: #000000;
+  color: #ffffff;
+}
+
+body.dark-mode textarea#note {
+  color: #ffffff;
+}
+
+body.dark-mode textarea#note::placeholder {
+  color: #666666;
+}
+
+body.dark-mode .hint {
+  color: #888888;
+}
+
+body.dark-mode .handle {
+  background: #ffffff;
+}
+
+body.dark-mode .help-overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+body.dark-mode .help-card {
+  background: #111111;
+  border: 1px solid #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+body.dark-mode .help-title {
+  color: #ffffff;
+}
+
+body.dark-mode .help-table td {
+  color: #ffffff;
+  border-bottom: 1px solid #444444;
+}
+
+body.dark-mode .help-table td:first-child {
+  color: #aaaaaa;
+}
+
+body.dark-mode .help-close {
+  color: #888888;
+}
+
+body.dark-mode .sheet-backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+body.dark-mode .sheet-panel {
+  background: #111111;
+  border-top: 1px solid #ffffff;
+}
+
+body.dark-mode .sheet-handle {
+  background: #ffffff;
+}
+
+body.dark-mode .sheet-title {
+  color: #888888;
+}
+
+body.dark-mode .sheet-action {
+  color: #ffffff;
+  border-bottom: 1px solid #444444;
+}
+
+body.dark-mode .sheet-action:active {
+  background: #333333;
+}
+
+body.dark-mode .undo-toast {
+  background: #ffffff;
+  color: #000000;
+}
+
+body.dark-mode .undo-btn {
+  color: #000000;
+}
+
+body.dark-mode .sheet-action:focus-visible,
+body.dark-mode .undo-btn:focus-visible,
+body.dark-mode .handle-hit:focus-visible {
+  outline: 2px solid #ffffff;
+}
+
+body.dark-mode .splash-overlay {
+  background: #000000;
+}
+
+body.dark-mode .loader {
+  --g: conic-gradient(from -90deg at 10px 10px, #fff 90deg, #0000 0);
+}
+
 /* ---------- Mobile ---------- */
 
 @media (pointer: coarse) {

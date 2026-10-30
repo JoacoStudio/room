@@ -15,6 +15,8 @@ const helpCard = document.querySelector('.help-card');
 
 const STORAGE_KEY = 'minimalist_notes';
 const ACTIVE_KEY = 'room_active_index';
+const THEME_KEY = 'room_theme';
+const THEMES = ['auto', 'dark', 'light'];
 const KEYS = {
   NEW: 'n',
   DELETE: 'b',
@@ -25,6 +27,7 @@ const KEYS = {
   EXPORT_ALL: 'e',
   IMPORT: 'i',
   READONLY: 'r',
+  THEME: 'o',
   HELP: 'x',
   CLOSE: 'Backspace'
 };
@@ -45,6 +48,7 @@ let deletedIndex = -1;
 let deletedPlaceholderId = null;
 let undoTimer = null;
 let isProgrammaticChange = false;
+let currentTheme = 'auto';
 
 function vibrate(ms = 10) {
   if (isCoarse && navigator.vibrate) navigator.vibrate(ms);
@@ -100,12 +104,49 @@ function stopClock() {
   clockInterval = null;
 }
 
-const hour = new Date().getHours();
-if (hour >= 20 || hour < 8) {
-  document.body.classList.add('dark-mode');
+function isNight() {
+  const hour = new Date().getHours();
+  return hour >= 20 || hour < 8;
+}
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch (e) {}
+
+  document.body.classList.remove('dark-mode');
+
+  if (theme === 'dark') {
+    document.body.classList.add('dark-mode');
+  } else if (theme === 'auto' && isNight()) {
+    document.body.classList.add('dark-mode');
+  }
+
+  showShortcutHint();
+}
+
+function toggleTheme() {
+  const idx = THEMES.indexOf(currentTheme);
+  const next = THEMES[(idx + 1) % THEMES.length];
+  applyTheme(next);
+
+  const labels = { auto: 'sistema', dark: 'oscuro', light: 'claro' };
+  showTransient(`Tema: ${labels[next]}`, 3000);
 }
 
 startClock();
+
+try {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved && THEMES.includes(saved)) {
+    applyTheme(saved);
+  } else if (isNight()) {
+    applyTheme('auto');
+  }
+} catch (e) {
+  if (isNight()) document.body.classList.add('dark-mode');
+}
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -687,6 +728,12 @@ document.addEventListener('keydown', (e) => {
   if (e.altKey && key === KEYS.READONLY) {
     e.preventDefault();
     toggleReadOnly();
+    return;
+  }
+
+  if (e.altKey && key === KEYS.THEME) {
+    e.preventDefault();
+    toggleTheme();
     return;
   }
 

@@ -30,6 +30,7 @@ Room/
 | Alt + E | Exportar todas las notas (.json) |
 | Alt + I | Importar notas desde archivo |
 | Alt + R | Modo lectura / escritura |
+| Alt + O | Tema: claro / oscuro / sistema |
 | Alt + X | Ayuda de atajos |
 
 ## Gestos en mobile
