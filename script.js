@@ -44,6 +44,7 @@ let deletedNote = null;
 let deletedIndex = -1;
 let deletedPlaceholderId = null;
 let undoTimer = null;
+let isProgrammaticChange = false;
 
 function vibrate(ms = 10) {
   if (isCoarse && navigator.vibrate) navigator.vibrate(ms);
@@ -187,6 +188,143 @@ function showTypingStats() {
   const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
   const chars = text.length;
   showTransient(`${words} palabras · ${chars} caracteres`, 4000);
+}
+
+/* ---------- Operaciones aritméticas ---------- */
+
+function tokenize(expr) {
+  const tokens = [];
+  let i = 0;
+  while (i < expr.length) {
+    const c = expr[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '√') { tokens.push('√'); i++; continue; }
+    if ('+-*/%^()'.includes(c)) { tokens.push(c); i++; continue; }
+    if (/\d/.test(c) || c === '.') {
+      let num = '';
+      while (i < expr.length && /[\d.]/.test(expr[i])) {
+        num += expr[i++];
+      }
+      tokens.push(parseFloat(num));
+      continue;
+    }
+    throw new Error('Carácter no válido: ' + c);
+  }
+  return tokens;
+}
+
+function evaluate(expr) {
+  const tokens = tokenize(expr);
+  let pos = 0;
+  function peek() { return pos < tokens.length ? tokens[pos] : null; }
+  function consume() { return tokens[pos++]; }
+
+  function parseExpr() {
+    let left = parseTerm();
+    while (true) {
+      const t = peek();
+      if (t === '+' || t === '-') {
+        consume();
+        const right = parseTerm();
+        left = t === '+' ? left + right : left - right;
+      } else break;
+    }
+    return left;
+  }
+
+  function parseTerm() {
+    let left = parseFactor();
+    while (true) {
+      const t = peek();
+      if (t === '*' || t === '/' || t === '%') {
+        consume();
+        const right = parseFactor();
+        if (t === '*') left = left * right;
+        else if (t === '/') left = left / right;
+        else left = left % right;
+      } else break;
+    }
+    return left;
+  }
+
+  function parseFactor() {
+    const t = peek();
+    if (t === '√') {
+      consume();
+      return Math.sqrt(parseFactor());
+    }
+    return parsePower();
+  }
+
+  function parsePower() {
+    let base = parseUnary();
+    const t = peek();
+    if (t === '^') {
+      consume();
+      return Math.pow(base, parsePower());
+    }
+    return base;
+  }
+
+  function parseUnary() {
+    const t = peek();
+    if (t === '+' || t === '-') {
+      consume();
+      return t === '+' ? parseUnary() : -parseUnary();
+    }
+    return parsePrimary();
+  }
+
+  function parsePrimary() {
+    const t = peek();
+    if (t === '(') {
+      consume();
+      const val = parseExpr();
+      if (peek() === ')') consume();
+      else throw new Error('Paréntesis no cerrado');
+      return val;
+    }
+    if (typeof t === 'number') {
+      consume();
+      return t;
+    }
+    throw new Error('Token inesperado: ' + t);
+  }
+
+  const result = parseExpr();
+  if (peek() !== null) throw new Error('Tokens sobrantes');
+  if (!Number.isFinite(result)) throw new Error('Resultado no válido');
+  return result;
+}
+
+function formatResult(n) {
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(6).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.$/, '');
+}
+
+function checkArithmetic() {
+  const val = note.value;
+  const lines = val.split('\n');
+  const lastIdx = lines.length - 1;
+  const lastLine = lines[lastIdx];
+  const trimmed = lastLine.trimEnd();
+
+  if (!trimmed.endsWith('=')) return;
+
+  const expr = trimmed.slice(0, -1).trim();
+  if (!expr) return;
+
+  try {
+    const result = evaluate(expr);
+    const formatted = formatResult(result);
+    isProgrammaticChange = true;
+    lines[lastIdx] = lastLine.replace(/=\s*$/, `= ${formatted}`);
+    note.value = lines.join('\n');
+    note.setSelectionRange(note.value.length, note.value.length);
+    isProgrammaticChange = false;
+  } catch (err) {
+    // No es una expresión aritmética válida: se deja tal cual
+  }
 }
 
 function downloadBlob(blob, filename) {
@@ -466,9 +604,11 @@ handleHit.addEventListener('click', openSheet);
 helpOverlay.addEventListener('click', () => toggleHelp(false));
 
 note.addEventListener('input', () => {
+  if (isProgrammaticChange) return;
   debouncedSave();
   clearTimeout(typingTimer);
   typingTimer = setTimeout(showTypingStats, 2000);
+  checkArithmetic();
 });
 
 note.addEventListener('blur', saveActive);

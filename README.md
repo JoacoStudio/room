@@ -12,6 +12,7 @@ Room/
 ├── src/
 │   └── Ic.ico          # Icono de la app
 ├── Room.bat            # Acceso rápido Windows
+├── Room.ps1            # Abre y posiciona la ventana
 ├── INSTALAR-DESKTOP.md # Instrucciones de instalación
 └── README.md           # Este archivo
 ```
@@ -47,6 +48,20 @@ En pantallas táctiles Room cambia a un modo sin botones visibles. La nota ocupa
 La hoja de acciones concentra lo destructivo o poco frecuente: **eliminar** (con deshacer durante 5 s), **exportar**, **importar**, **solo lectura** y **ayuda**. Los gestos solo se activan con el dedo; con mouse o teclado se mantienen los atajos de siempre. Si mantenés el dedo quieto antes de mover, el gesto se cancela para no interferir con la selección de texto.
 
 > Las notas se guardan en el `localStorage` de cada navegador. No se sincronizan automáticamente entre desktop y mobile.
+
+## Operaciones aritméticas
+
+Room lee automáticamente las expresiones que escribís en la nota. Al terminar una línea con `=`, el resultado se calcula y se inserta en el texto.
+
+| Escribís | Resultado |
+|----------|-----------|
+| `2 + 3 =` | `2 + 3 = 5` |
+| `(10 + 5) / 3 =` | `(10 + 5) / 3 = 5` |
+| `2 ^ 8 =` | `2 ^ 8 = 256` |
+| `√ 16 =` | `√ 16 = 4` |
+| `17 % 5 =` | `17 % 5 = 2` |
+
+Operaciones soportadas: `+`, `-`, `*`, `/`, `%` (módulo), `^` (potencia) y `√` (raíz cuadrada), con paréntesis `()` para agrupar. Si lo que escribís antes de `=` no es una expresión válida, se deja tal cual.
 
 ## Cómo usar
 
