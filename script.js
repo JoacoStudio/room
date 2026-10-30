@@ -19,6 +19,97 @@ const KEYS = {
   HELP: 'x'
 };
 
+// ⚠️ CONFIGURACIÓN DE SUPABASE
+// Reemplaza 'https://TU_PROYECTO.supabase.co' con la URL real de tu proyecto Supabase.
+// Puedes encontrarla en: https://app.supabase.com/project/_/settings/general
+const SUPABASE_URL = 'https://TU_PROYECTO.supabase.co';
+
+// ⚠️ ADVERTENCIA DE SEGURIDAD
+// NUNCA subas claves reales a GitHub. Usa la "anon key" pública de Supabase en su lugar,
+// o crea una Edge Function para que la clave de servicio nunca se exponga en el navegador.
+// Obtén tu clave en: https://app.supabase.com/project/_/settings/api
+const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY_AQUI';
+
+let supabase = null;
+
+function initSupabase() {
+  if (!window.supabaseClient || !SUPABASE_URL || SUPABASE_URL.includes('TU_PROYECTO') || SUPABASE_KEY.includes('TU_SUPABASE')) {
+    return;
+  }
+  try {
+    supabase = window.supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch (e) {
+    console.error('Error inicializando Supabase:', e);
+  }
+}
+
+async function syncToSupabase() {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from('notes')
+      .upsert(notes.map(n => ({
+        id: n.id,
+        title: n.title || '',
+        body: n.body || '',
+        updated: n.updated,
+        updated_at: new Date(n.updated || Date.now()).toISOString()
+      })));
+    if (error) throw error;
+  } catch (e) {
+    console.error('Error sincronizando con Supabase:', e);
+  }
+}
+
+async function loadFromSupabase() {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error('Error cargando desde Supabase:', e);
+    return [];
+  }
+}
+
+function mergeRemoteNotes(remoteNotes) {
+  if (!remoteNotes || remoteNotes.length === 0) return false;
+  const remoteById = {};
+  remoteNotes.forEach(n => { remoteById[n.id] = n; });
+
+  let changed = false;
+  notes.forEach(n => {
+    if (remoteById[n.id]) {
+      const remote = remoteById[n.id];
+      const remoteUpdated = new Date(remote.updated || remote.updated_at || 0).getTime();
+      const localUpdated = new Date(n.updated || 0).getTime();
+      if (remoteUpdated > localUpdated) {
+        n.body = remote.body || n.body;
+        n.title = remote.title || n.title;
+        n.updated = remoteUpdated;
+        changed = true;
+      }
+      delete remoteById[n.id];
+    }
+  });
+
+  Object.values(remoteById).forEach(n => {
+    notes.push({
+      id: n.id,
+      title: n.title || '',
+      body: n.body || '',
+      updated: new Date(n.updated || n.updated_at || Date.now()).getTime()
+    });
+    changed = true;
+  });
+
+  return changed;
+}
+
 let notes = [];
 let activeIndex = 0;
 let hintTimer = null;
@@ -26,6 +117,7 @@ let typingTimer = null;
 let saveTimer = null;
 let isReadOnly = false;
 let clockInterval = null;
+let supabaseReady = false;
 
 function loadNotes() {
   try {
@@ -38,6 +130,23 @@ function loadNotes() {
     notes = [{ id: Date.now().toString(), title: '', body: '', updated: Date.now() }];
     saveNotes();
   }
+
+  if (supabase) {
+    loadFromSupabase().then(remoteNotes => {
+      if (remoteNotes && remoteNotes.length > 0) {
+        const changed = mergeRemoteNotes(remoteNotes);
+        if (changed) {
+          saveNotes();
+          loadNote(activeIndex >= notes.length ? notes.length - 1 : activeIndex);
+        }
+      }
+      supabaseReady = true;
+    }).catch(() => {
+      supabaseReady = true;
+    });
+  } else {
+    supabaseReady = true;
+  }
 }
 
 function saveNotes() {
@@ -45,6 +154,9 @@ function saveNotes() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
   } catch (e) {
     showStatus('No se pudo guardar en almacenamiento local', 'error');
+  }
+  if (supabase && supabaseReady) {
+    syncToSupabase();
   }
 }
 
@@ -314,6 +426,8 @@ function hideSplash() {
 }
 
 setTimeout(hideSplash, 2500);
+
+initSupabase();
 
 loadNotes();
 loadNote(0);
