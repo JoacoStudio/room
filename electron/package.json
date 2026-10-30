@@ -1,0 +1,19 @@
+{
+  "name": "room",
+  "productName": "Room",
+  "version": "1.0.0",
+  "description": "Organizador de notas minimalista",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
