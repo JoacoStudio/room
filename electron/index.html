@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Room</title>
+<link rel="icon" href="src/Ic.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="clock" aria-label="Reloj"></div>
+<div class="container">
+<textarea id="note" placeholder="Escribe aquí..." spellcheck="false" aria-label="Contenido de la nota"></textarea>
+<div class="hint" id="hint" aria-live="polite" aria-atomic="true"></div>
+</div>
+<input type="file" id="fileInput" accept=".txt,.json,.md" hidden>
+
+<div id="helpOverlay" class="help-overlay">
+<div class="help-card">
+<h1 class="help-title">Atajos de teclado</h1>
+<table class="help-table">
+<tr><td>Alt + N</td><td>Nueva nota</td></tr>
+<tr><td>Alt + B</td><td>Eliminar nota actual</td></tr>
+<tr><td>Alt + ←</td><td>Nota anterior</td></tr>
+<tr><td>Alt + →</td><td>Siguiente nota</td></tr>
+<tr><td>Alt + Q</td><td>Pantalla completa</td></tr>
+<tr><td>Alt + D</td><td>Exportar nota (.txt)</td></tr>
+<tr><td>Alt + E</td><td>Exportar todas las notas (.json)</td></tr>
+<tr><td>Alt + I</td><td>Importar notas desde archivo</td></tr>
+<tr><td>Alt + R</td><td>Modo lectura / escritura</td></tr>
+<tr><td>Alt + X</td><td>Esta ayuda</td></tr>
+</table>
+<p class="help-close">Presiona cualquier tecla para cerrar</p>
+</div>
+</div>
+
+<div id="splashOverlay" class="splash-overlay">
+  <div class="loader"></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

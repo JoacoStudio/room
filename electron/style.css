@@ -1,0 +1,168 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  color: #000000;
+  font-family: "Nunito Sans", -apple-system, BlinkMacSystemFont, "Sego UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  padding: 48px 32px;
+}
+
+textarea#note {
+  width: 100%;
+  max-width: 720px;
+  height: 60vh;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 400;
+  color: #000000;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  text-align: left;
+  padding: 0;
+}
+
+textarea#note::placeholder {
+  color: #999999;
+}
+
+textarea#note[readonly] {
+  opacity: 0.6;
+}
+
+.hint {
+  margin-top: 24px;
+  font-size: 12px;
+  color: #666666;
+  text-align: center;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 200;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+
+.help-card {
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #000000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  max-width: 560px;
+  width: 85vw;
+  padding: 40px 32px;
+}
+
+.help-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 32px;
+  color: #000000;
+  text-align: center;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 32px;
+}
+
+.help-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 16px;
+  color: #000000;
+}
+
+.help-table td:first-child {
+  width: 120px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #333333;
+}
+
+.help-table tr:last-child td {
+  border-bottom: none;
+}
+
+.help-close {
+  font-size: 13px;
+  color: #666666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.6s ease;
+}
+
+.splash-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader {
+  width: 60px;
+  aspect-ratio: 1;
+  --g: conic-gradient(from -90deg at 10px 10px,#000 90deg,#0000 0);
+  background: var(--g), var(--g), var(--g);
+  background-size: 50% 50%;
+  animation: l19 1s infinite;
+}
+
+@keyframes l19 {
+   0%   {background-position:0     0, 10px 10px, 20px 20px}
+   33%  {background-position:10px  10px}
+   66%  {background-position:0    20px,10px 10px,20px 0   }
+   100% {background-position:0     0, 10px 10px, 20px 20px}
+}
+
+#clock {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  font-size: 14px;
+  color: #666666;
+  font-variant-numeric: tabular-nums;
+}
+
+body.dark-mode #clock {
+  color: #888888;
+}

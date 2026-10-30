@@ -9,7 +9,7 @@ function createWindow() {
     minHeight: 500,
     title: 'Room',
     frame: false,
-    icon: path.join(__dirname, '..', 'src', 'Ic.ico'),
+    icon: path.join(__dirname, 'src', 'Ic.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -17,7 +17,7 @@ function createWindow() {
     }
   });
 
-  win.loadFile(path.join(__dirname, '..', 'index.html'));
+  win.loadFile(path.join(__dirname, 'index.html'));
 }
 
 app.whenReady().then(() => {
