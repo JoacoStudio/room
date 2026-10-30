@@ -20,33 +20,33 @@ const KEYS = {
 };
 
 // ⚠️ CONFIGURACIÓN DE SUPABASE
-// Reemplaza 'https://TU_PROYECTO.supabase.co' con la URL real de tu proyecto Supabase.
+// Reemplaza con la URL real de tu proyecto Supabase.
 // Puedes encontrarla en: https://app.supabase.com/project/_/settings/general
 const SUPABASE_URL = 'https://TU_PROYECTO.supabase.co';
 
 // ⚠️ ADVERTENCIA DE SEGURIDAD
-// NUNCA subas claves reales a GitHub. Usa la "anon key" pública de Supabase en su lugar,
-// o crea una Edge Function para que la clave de servicio nunca se exponga en el navegador.
+// NUNCA subas claves reales a GitHub. Usa la "anon key" pública de Supabase.
 // Obtén tu clave en: https://app.supabase.com/project/_/settings/api
 const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY_AQUI';
 
 let supabase = null;
 
 function initSupabase() {
-  if (!window.supabase || !SUPABASE_URL || SUPABASE_URL.includes('TU_PROYECTO') || SUPABASE_KEY.includes('TU_SUPABASE')) {
-    return;
-  }
   try {
+    if (!window.supabase || !SUPABASE_URL || SUPABASE_URL.includes('TU_PROYECTO') || SUPABASE_KEY.includes('TU_SUPABASE')) {
+      return;
+    }
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   } catch (e) {
     console.error('Error inicializando Supabase:', e);
+    supabase = null;
   }
 }
 
 async function syncToSupabase() {
   if (!supabase) return;
   try {
-    const { error } = await supabase
+    await supabase
       .from('notes')
       .upsert(notes.map(n => ({
         id: n.id,
@@ -55,7 +55,6 @@ async function syncToSupabase() {
         updated: n.updated,
         updated_at: new Date(n.updated || Date.now()).toISOString()
       })));
-    if (error) throw error;
   } catch (e) {
     console.error('Error sincronizando con Supabase:', e);
   }
@@ -419,15 +418,35 @@ document.addEventListener('keydown', (e) => {
 });
 
 function hideSplash() {
-  splashOverlay.classList.add('hidden');
-  setTimeout(() => {
+  try {
+    splashOverlay.classList.add('hidden');
+    setTimeout(() => {
+      splashOverlay.style.display = 'none';
+    }, 600);
+  } catch (e) {
+    console.error('Error ocultando splash:', e);
     splashOverlay.style.display = 'none';
-  }, 600);
+  }
 }
 
+// Inicializar todo con protección contra errores
+function initApp() {
+  try {
+    initSupabase();
+    loadNotes();
+    loadNote(0);
+  } catch (e) {
+    console.error('Error inicializando app:', e);
+  }
+}
+
+// Siempre ocultar el splash después de 2.5 segundos, pase lo que pase
 setTimeout(hideSplash, 2500);
 
-initSupabase();
+initApp();
 
-loadNotes();
-loadNote(0);
+// También ocultar splash si hay algún error global
+window.addEventListener('error', (e) => {
+  console.error('Error global:', e.error);
+  hideSplash();
+});
