@@ -1,6 +1,6 @@
 # Room
 
-Organizador de notas minimalista. Blanco y negro, sin botones, todo por teclado.
+Organizador de notas minimalista. Blanco y negro, sin botones en la nota: teclado en desktop y gestos en mobile.
 
 ## Estructura
 
@@ -11,10 +11,6 @@ Room/
 ├── script.js           # Lógica de notas y atajos
 ├── src/
 │   └── Ic.ico          # Icono de la app
-├── electron/
-│   ├── main.js         # Ventana Electron
-│   ├── preload.js      # Puente seguro
-│   └── package.json    # Configuración
 ├── Room.bat            # Acceso rápido Windows
 ├── INSTALAR-DESKTOP.md # Instrucciones de instalación
 └── README.md           # Este archivo
@@ -34,6 +30,23 @@ Room/
 | Alt + I | Importar notas desde archivo |
 | Alt + R | Modo lectura / escritura |
 | Alt + X | Ayuda de atajos |
+
+## Gestos en mobile
+
+En pantallas táctiles Room cambia a un modo sin botones visibles. La nota ocupa la pantalla y la barra inferior muestra la posición (`2 / 5`) y un handle fino.
+
+| Gesto | Acción |
+|-------|--------|
+| Deslizar ← sobre la nota o la barra | Siguiente nota |
+| Deslizar → sobre la nota o la barra | Nota anterior |
+| Deslizar ↓ desde el borde superior | Nueva nota |
+| Deslizar ↑ desde la barra inferior | Abrir acciones |
+| Tocar el handle de la barra | Abrir acciones |
+| Deslizar la hoja hacia abajo | Cerrarla |
+
+La hoja de acciones concentra lo destructivo o poco frecuente: **eliminar** (con deshacer durante 5 s), **exportar**, **importar**, **solo lectura** y **ayuda**. Los gestos solo se activan con el dedo; con mouse o teclado se mantienen los atajos de siempre. Si mantenés el dedo quieto antes de mover, el gesto se cancela para no interferir con la selección de texto.
+
+> Las notas se guardan en el `localStorage` de cada navegador. No se sincronizan automáticamente entre desktop y mobile.
 
 ## Cómo usar
 

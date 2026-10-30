@@ -1,12 +1,12 @@
 # Room - App de Escritorio
 
-Tienes dos formas de usar Room como aplicación de escritorio en Windows:
+Room corre en el navegador y no necesita instalación. En Windows puedes abrirla como una ventana de aplicación, sin barra de direcciones ni pestañas.
 
 ---
 
-## Opción 1: Acceso directo rápido (sin instalar nada)
+## Acceso directo rápido
 
-Haz doble clic en **`Room.bat`**. Esto abrirá la aplicación en una ventana de navegador sin barra de direcciones ni pestañas, pareciéndose a una app de escritorio nativa.
+Haz doble clic en **`Room.bat`**. Esto abrirá Room con Chrome (o Edge, si no está Chrome) en modo aplicación, pareciéndose a una app de escritorio nativa.
 
 Para dejarlo siempre a mano en el escritorio:
 1. Haz clic derecho sobre `Room.bat`
@@ -14,36 +14,7 @@ Para dejarlo siempre a mano en el escritorio:
 
 ---
 
-## Opción 2: App real con Electron (.exe)
-
-Si quieres un ejecutable independiente que no dependa del navegador instalado:
-
-### Requisitos
-- Tener instalado [Node.js](https://nodejs.org/) (versión 18 o superior)
-
-### Pasos
-1. Abre una terminal en la carpeta del proyecto:
-   ```powershell
-   cd C:\Users\jotag\Todo\notas-minimalista\electron
-   ```
-2. Instala dependencias:
-   ```powershell
-   npm install
-   ```
-3. Inicia la app en modo desarrollo:
-   ```powershell
-   npm start
-   ```
-4. Para generar el instalador de Windows:
-   ```powershell
-   npm run dist
-   ```
-
-Esto creará un instalador en la carpeta `electron/dist/` que puedes instalar como cualquier programa de Windows.
-
----
-
-### Atajos de teclado de Room
+## Atajos de teclado de Room
 
 | Combinación | Acción |
 |-------------|--------|
@@ -53,6 +24,8 @@ Esto creará un instalador en la carpeta `electron/dist/` que puedes instalar co
 | Alt + → | Siguiente nota |
 | Alt + Q | Pantalla completa |
 | Alt + D | Exportar nota (.txt) |
+| Alt + E | Exportar todas las notas (.json) |
+| Alt + I | Importar notas desde archivo |
 | Alt + R | Modo lectura / escritura |
 | Alt + X | Ayuda de atajos |
 
