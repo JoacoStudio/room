@@ -5,6 +5,7 @@ import {
   PanResponder,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 
 import { evaluate, formatResult } from '../utils/arithmetic';
@@ -131,6 +132,8 @@ export default function NoteEditor({
         spellCheck={false}
         autoCapitalize="none"
         autoCorrect={false}
+        returnKeyType="done"
+        onSubmitEditing={Keyboard.dismiss}
         placeholder="Escribe aquí..."
         placeholderTextColor="#999999"
         {...swipeResponder.panHandlers}
