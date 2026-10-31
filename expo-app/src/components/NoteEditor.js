@@ -1,10 +1,12 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import {
   TextInput,
+  View,
   StyleSheet,
   PanResponder,
   KeyboardAvoidingView,
   Platform,
+  TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
 
@@ -12,16 +14,21 @@ import { evaluate, formatResult } from '../utils/arithmetic';
 
 /**
  * Crea un PanResponder para swipe horizontal sobre el editor.
- * Los callbacks se pasan como argumentos para no ejecutar código impuro durante render.
+ * Usa la capture phase para interceptar el gesto ANTES que el TextInput,
+ * de modo que los deslizamientos horizontales naveguen y los toques cortos
+ * sigan escribiendo/seleccionando texto normalmente.
  */
 function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }) {
   return PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (e, gestureState) => {
-      return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
+    onStartShouldSetPanResponderCapture: () => false,
+    onMoveShouldSetPanResponderCapture: (e, gestureState) => {
+      const dx = gestureState.dx;
+      const dy = gestureState.dy;
+      // Capturar solo si el movimiento es claramente horizontal
+      return Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.25;
     },
     onPanResponderGrant: (e, gestureState) => {
-      gestureState._axis = null;
+      gestureState._axis = 'x';
       gestureState._startTime = Date.now();
       gestureState._moved = false;
       gestureState._cancelled = false;
@@ -31,22 +38,20 @@ function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }
       const dy = gestureState.dy;
       const now = Date.now();
 
-      if (gestureState._axis === null) {
-        if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-        if (now - gestureState._startTime > 350) {
-          gestureState._cancelled = true;
-          return;
-        }
-        gestureState._axis = Math.abs(dx) > Math.abs(dy) * 1.25 ? 'x' : 'y';
-        if (gestureState._axis !== 'x') return;
-        gestureState._moved = true;
+      if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+      if (now - gestureState._startTime > 350) {
+        gestureState._cancelled = true;
+        return;
       }
-
-      if (gestureState._axis !== 'x') return;
-      e.preventDefault();
+      if (!gestureState._moved) {
+        gestureState._moved = true;
+        e.preventDefault();
+      } else {
+        e.preventDefault();
+      }
     },
     onPanResponderRelease: (e, gestureState) => {
-      if (gestureState._axis !== 'x' || !gestureState._moved || gestureState._cancelled) return;
+      if (!gestureState._moved || gestureState._cancelled) return;
 
       const dx = gestureState.dx;
       const elapsed = Math.max(1, Date.now() - gestureState._startTime);
@@ -117,33 +122,37 @@ export default function NoteEditor({
   }, [onChange, checkArithmetic]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <TextInput
-        ref={inputRef}
-        style={styles.editor}
-        value={note}
-        onChangeText={handleChangeText}
-        editable={!readOnly}
-        multiline
-        numberOfLines={24}
-        spellCheck={false}
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="done"
-        onSubmitEditing={Keyboard.dismiss}
-        placeholder="Escribe aquí..."
-        placeholderTextColor="#999999"
-        {...swipeResponder.panHandlers}
-      />
-    </KeyboardAvoidingView>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.editorWrap} {...swipeResponder.panHandlers}>
+          <TextInput
+            ref={inputRef}
+            style={styles.editor}
+            value={note}
+            onChangeText={handleChangeText}
+            editable={!readOnly}
+            multiline
+            numberOfLines={24}
+            spellCheck={false}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Escribe aquí..."
+            placeholderTextColor="#999999"
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  editorWrap: {
     flex: 1,
   },
   editor: {
