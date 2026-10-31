@@ -12,16 +12,24 @@ import {
 import { evaluate, formatResult } from '../utils/arithmetic';
 
 /**
- * Crea un PanResponder para swipe sobre el editor de notas.
- * Usa capture phase para interceptar el tacto ANTES que el TextInput:
- * - Eje X (horizontal): navegar entre notas
- * - Eje Y hacia abajo: cerrar el teclado
- * Los toques cortos y el scroll vertical de texto siguen funcionando normalmente.
+ * Crea un PanResponder para el editor de notas.
+ *
+ * Reglas:
+ * - Toque corto (< 10px): NO captura, va al TextInput (escribir / seleccionar)
+ * - Swipe horizontal (izquierda/derecha): navega entre notas
+ * - Swipe hacia abajo: cierra el teclado
+ * - Swipe hacia arriba: se deja al texto (scroll)
  */
-function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }) {
+function makeEditorSwipeResponder({
+  onSwipeLeft,
+  onSwipeRight,
+  onCloseKeyboard,
+  atFirst,
+  atLast,
+}) {
   return PanResponder.create({
-    onStartShouldSetPanResponderCapture: () => false,
-    onMoveShouldSetPanResponderCapture: (e, gestureState) => {
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (e, gestureState) => {
       const dx = gestureState.dx;
       const dy = gestureState.dy;
       return Math.abs(dx) > 10 || Math.abs(dy) > 10;
@@ -77,11 +85,10 @@ function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }
           }
         }
       } else if (gestureState._axis === 'y' && dy > 0) {
-        // Swipe hacia abajo sobre el texto: cerrar teclado
         const velocity = Math.abs(dy) / elapsed;
         const passedY = Math.abs(dy) > 60 || velocity > 0.4;
-        if (passedY) {
-          Keyboard.dismiss();
+        if (passedY && typeof onCloseKeyboard === 'function') {
+          onCloseKeyboard();
         }
       }
     },
@@ -102,7 +109,13 @@ export default function NoteEditor({
   const inputRef = useRef(null);
 
   const swipeResponder = useMemo(() => {
-    return makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast });
+    return makeEditorSwipeResponder({
+      onSwipeLeft,
+      onSwipeRight,
+      onCloseKeyboard: () => Keyboard.dismiss(),
+      atFirst,
+      atLast,
+    });
   }, [onSwipeLeft, onSwipeRight, atFirst, atLast]);
 
   const checkArithmetic = useCallback((text) => {
