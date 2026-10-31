@@ -6,17 +6,17 @@ import {
   PanResponder,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
 
 import { evaluate, formatResult } from '../utils/arithmetic';
 
 /**
- * Crea un PanResponder para swipe horizontal sobre el editor.
- * Usa la capture phase para interceptar el gesto ANTES que el TextInput,
- * de modo que los deslizamientos horizontales naveguen y los toques cortos
- * sigan escribiendo/seleccionando texto normalmente.
+ * Crea un PanResponder para swipe sobre el editor de notas.
+ * Usa capture phase para interceptar el tacto ANTES que el TextInput:
+ * - Eje X (horizontal): navegar entre notas
+ * - Eje Y hacia abajo: cerrar el teclado
+ * Los toques cortos y el scroll vertical de texto siguen funcionando normalmente.
  */
 function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }) {
   return PanResponder.create({
@@ -24,11 +24,10 @@ function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }
     onMoveShouldSetPanResponderCapture: (e, gestureState) => {
       const dx = gestureState.dx;
       const dy = gestureState.dy;
-      // Capturar solo si el movimiento es claramente horizontal
-      return Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.25;
+      return Math.abs(dx) > 10 || Math.abs(dy) > 10;
     },
     onPanResponderGrant: (e, gestureState) => {
-      gestureState._axis = 'x';
+      gestureState._axis = null;
       gestureState._startTime = Date.now();
       gestureState._moved = false;
       gestureState._cancelled = false;
@@ -38,15 +37,17 @@ function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }
       const dy = gestureState.dy;
       const now = Date.now();
 
-      if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-      if (now - gestureState._startTime > 350) {
-        gestureState._cancelled = true;
-        return;
-      }
-      if (!gestureState._moved) {
+      if (gestureState._axis === null) {
+        if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+        if (now - gestureState._startTime > 350) {
+          gestureState._cancelled = true;
+          return;
+        }
+        gestureState._axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
         gestureState._moved = true;
-        e.preventDefault();
-      } else {
+      }
+
+      if (gestureState._axis === 'x' || (gestureState._axis === 'y' && dy > 0)) {
         e.preventDefault();
       }
     },
@@ -54,24 +55,33 @@ function makeEditorSwipeResponder({ onSwipeLeft, onSwipeRight, atFirst, atLast }
       if (!gestureState._moved || gestureState._cancelled) return;
 
       const dx = gestureState.dx;
+      const dy = gestureState.dy;
       const elapsed = Math.max(1, Date.now() - gestureState._startTime);
-      const velocity = Math.abs(dx) / elapsed;
 
-      const minPx = 120;
-      const thresholdPct = 0.25;
-      const velocityThreshold = 0.45;
-      const width = 300;
+      if (gestureState._axis === 'x') {
+        const velocity = Math.abs(dx) / elapsed;
+        const minPx = 120;
+        const thresholdPct = 0.25;
+        const velocityThreshold = 0.45;
+        const width = 300;
+        const passed =
+          Math.abs(dx) > Math.min(minPx, width * thresholdPct) || velocity > velocityThreshold;
 
-      const passed =
-        Math.abs(dx) > Math.min(minPx, width * thresholdPct) || velocity > velocityThreshold;
-
-      if (dx < 0) {
-        if (passed && !atLast && typeof onSwipeLeft === 'function') {
-          onSwipeLeft();
+        if (dx < 0) {
+          if (passed && !atLast && typeof onSwipeLeft === 'function') {
+            onSwipeLeft();
+          }
+        } else if (dx > 0) {
+          if (passed && !atFirst && typeof onSwipeRight === 'function') {
+            onSwipeRight();
+          }
         }
-      } else if (dx > 0) {
-        if (passed && !atFirst && typeof onSwipeRight === 'function') {
-          onSwipeRight();
+      } else if (gestureState._axis === 'y' && dy > 0) {
+        // Swipe hacia abajo sobre el texto: cerrar teclado
+        const velocity = Math.abs(dy) / elapsed;
+        const passedY = Math.abs(dy) > 60 || velocity > 0.4;
+        if (passedY) {
+          Keyboard.dismiss();
         }
       }
     },
@@ -122,29 +132,27 @@ export default function NoteEditor({
   }, [onChange, checkArithmetic]);
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <View style={styles.editorWrap} {...swipeResponder.panHandlers}>
-          <TextInput
-            ref={inputRef}
-            style={styles.editor}
-            value={note}
-            onChangeText={handleChangeText}
-            editable={!readOnly}
-            multiline
-            numberOfLines={24}
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Escribe aquí..."
-            placeholderTextColor="#999999"
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <View style={styles.editorWrap} {...swipeResponder.panHandlers}>
+        <TextInput
+          ref={inputRef}
+          style={styles.editor}
+          value={note}
+          onChangeText={handleChangeText}
+          editable={!readOnly}
+          multiline
+          numberOfLines={24}
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="Escribe aquí..."
+          placeholderTextColor="#999999"
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
