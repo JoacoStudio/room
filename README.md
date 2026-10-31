@@ -31,6 +31,7 @@ Room/
 | Alt + I | Importar notas desde archivo |
 | Alt + R | Modo lectura / escritura |
 | Alt + O | Tema: claro / oscuro / sistema |
+| Alt + 2 | Hub de estadísticas |
 | Alt + X | Ayuda de atajos |
 
 ## Gestos en mobile

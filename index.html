@@ -40,6 +40,7 @@
       <tr><td>Alt + E</td><td>Exportar todas las notas (.json)</td></tr>
       <tr><td>Alt + I</td><td>Importar notas desde archivo</td></tr>
       <tr><td>Alt + R</td><td>Modo lectura / escritura</td></tr>
+      <tr><td>Alt + 2</td><td>Hub de estadísticas</td></tr>
       <tr><td>Alt + X</td><td>Esta ayuda</td></tr>
     </table>
     <table class="help-table help-mobile">
@@ -79,6 +80,15 @@
 
 <div id="splashOverlay" class="splash-overlay">
   <div class="loader"></div>
+</div>
+
+<div id="hubOverlay" class="hub-overlay" role="dialog" aria-modal="true" aria-labelledby="hubTitle" aria-hidden="true">
+  <div class="hub-card" tabindex="-1">
+    <h1 class="hub-title" id="hubTitle">Hub</h1>
+    <div class="hub-stats" id="hubStats"></div>
+    <p class="hub-close help-desktop">Presiona Alt + 2 para cerrar</p>
+    <p class="hub-close help-mobile">Toca para cerrar</p>
+  </div>
 </div>
 
 <script src="script.js"></script>

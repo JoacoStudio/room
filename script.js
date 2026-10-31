@@ -12,11 +12,13 @@ const sheetPanel = document.getElementById('sheetPanel');
 const undoToast = document.getElementById('undoToast');
 const undoBtn = document.getElementById('undoBtn');
 const helpCard = document.querySelector('.help-card');
+const hubOverlay = document.getElementById('hubOverlay');
 
 const STORAGE_KEY = 'minimalist_notes';
 const ACTIVE_KEY = 'room_active_index';
 const THEME_KEY = 'room_theme';
 const THEMES = ['auto', 'dark', 'light'];
+const STATS_KEY = 'room_stats';
 const KEYS = {
   NEW: 'n',
   DELETE: 'b',
@@ -49,6 +51,16 @@ let deletedPlaceholderId = null;
 let undoTimer = null;
 let isProgrammaticChange = false;
 let currentTheme = 'auto';
+let hubOpen = false;
+let stats = {
+  wordsTotal: 0,
+  charsTotal: 0,
+  notesCreated: 0,
+  notesDeleted: 0,
+  daysActive: [],
+  lastActivity: null,
+  lastNotes: []
+};
 
 function vibrate(ms = 10) {
   if (isCoarse && navigator.vibrate) navigator.vibrate(ms);
@@ -133,6 +145,121 @@ function toggleTheme() {
 
   const labels = { auto: 'sistema', dark: 'oscuro', light: 'claro' };
   showTransient(`Tema: ${labels[next]}`, 3000);
+}
+
+/* ---------- Hub / Estadísticas ---------- */
+
+function loadStats() {
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (raw) stats = JSON.parse(raw);
+  } catch (e) {
+    stats = {
+      wordsTotal: 0,
+      charsTotal: 0,
+      notesCreated: 0,
+      notesDeleted: 0,
+      daysActive: [],
+      lastActivity: null,
+      lastNotes: []
+    };
+  }
+}
+
+function saveStats() {
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch (e) {}
+}
+
+function recordTyping() {
+  const text = note.value || '';
+  const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+  const chars = text.length;
+
+  const today = new Date().toDateString();
+  if (!stats.daysActive.includes(today)) {
+    stats.daysActive.push(today);
+  }
+
+  stats.lastActivity = Date.now();
+  stats.wordsTotal = Math.max(stats.wordsTotal, words);
+  stats.charsTotal = Math.max(stats.charsTotal, chars);
+
+  saveStats();
+}
+
+function recordNoteCreated() {
+  stats.notesCreated++;
+  saveStats();
+}
+
+function recordNoteDeleted() {
+  stats.notesDeleted++;
+  saveStats();
+}
+
+function getLastNotes() {
+  return notes
+    .slice()
+    .sort((a, b) => (b.updated || 0) - (a.updated || 0))
+    .slice(0, 5)
+    .map((n) => n.body || '')
+    .filter((t) => t.trim() !== '')
+    .map((t) => (t.length > 40 ? t.slice(0, 40) + '…' : t));
+}
+
+function calculateWPM() {
+  if (!stats.lastActivity) return 0;
+  const now = Date.now();
+  const minutes = Math.max(1, (now - stats.lastActivity) / 60000);
+  return Math.round(stats.wordsTotal / minutes);
+}
+
+function renderHubStats() {
+  const container = document.getElementById('hubStats');
+  if (!container) return;
+
+  const totalWords = stats.wordsTotal;
+  const totalChars = stats.charsTotal;
+  const daysActive = stats.daysActive.length;
+  const wpm = calculateWPM();
+  const lastNotes = getLastNotes();
+
+  let html = `
+    <div class="stat-row"><span class="stat-label">Notas totales</span><span class="stat-value">${notes.length}</span></div>
+    <div class="stat-row"><span class="stat-label">Palabras escritas</span><span class="stat-value">${totalWords}</span></div>
+    <div class="stat-row"><span class="stat-label">Caracteres escritos</span><span class="stat-value">${totalChars}</span></div>
+    <div class="stat-row"><span class="stat-label">Ritmo aproximado</span><span class="stat-value">${wpm} palabras/min</span></div>
+    <div class="stat-row"><span class="stat-label">Días activos</span><span class="stat-value">${daysActive}</span></div>
+    <div class="stat-row"><span class="stat-label">Notas creadas</span><span class="stat-value">${stats.notesCreated}</span></div>
+    <div class="stat-row"><span class="stat-label">Notas eliminadas</span><span class="stat-value">${stats.notesDeleted}</span></div>
+  `;
+
+  if (lastNotes.length > 0) {
+    html += `<div class="stat-row" style="border-top: 2px solid #000000; padding-top: 10px; margin-top: 10px;">`;
+    html += `<span class="stat-label">Últimas notas</span>`;
+    html += `<ul class="stat-list" style="margin: 4px 0 0 0; padding-left: 16px; text-align: left;">`;
+    lastNotes.forEach((t) => {
+      html += `<li style="margin: 2px 0; font-size: 14px;">"${t}"</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleHub() {
+  const show = hubOverlay.style.display !== 'flex';
+  hubOverlay.style.display = show ? 'flex' : 'none';
+  hubOverlay.setAttribute('aria-hidden', String(!show));
+  hubOpen = show;
+  if (show) {
+    note.blur();
+    renderHubStats();
+  } else {
+    note.focus();
+  }
 }
 
 startClock();
@@ -471,6 +598,7 @@ function createNote() {
   notes.push(newNote);
   saveNotes();
   loadNote(notes.length - 1, true);
+  recordNoteCreated();
   vibrate(10);
 }
 
@@ -495,6 +623,7 @@ function deleteNote() {
   deletedNote = removed;
   deletedIndex = activeIndex;
   deletedPlaceholderId = null;
+  recordNoteDeleted();
   saveNotes();
 
   if (notes.length === 0) {
@@ -650,6 +779,7 @@ note.addEventListener('input', () => {
   clearTimeout(typingTimer);
   typingTimer = setTimeout(showTypingStats, 2000);
   checkArithmetic();
+  recordTyping();
 });
 
 note.addEventListener('blur', saveActive);
@@ -668,7 +798,14 @@ document.addEventListener('keydown', (e) => {
       toggleHelp(false);
       return;
     }
+    if (hubOverlay.style.display === 'flex') {
+      e.preventDefault();
+      toggleHub(false);
+      return;
+    }
   }
+
+  if (hubOverlay.style.display === 'flex') return;
 
   if (sheetOpen) return;
 
@@ -734,6 +871,12 @@ document.addEventListener('keydown', (e) => {
   if (e.altKey && key === KEYS.THEME) {
     e.preventDefault();
     toggleTheme();
+    return;
+  }
+
+  if (e.altKey && key === '2') {
+    e.preventDefault();
+    toggleHub();
     return;
   }
 
@@ -1122,6 +1265,7 @@ function hideSplash() {
 function initApp() {
   try {
     loadNotes();
+    loadStats();
     loadNote(getSavedIndex(), !isCoarse);
   } catch (e) {
     console.error('Error inicializando app:', e);

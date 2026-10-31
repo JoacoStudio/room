@@ -440,6 +440,102 @@ body.dark-mode .loader {
   --g: conic-gradient(from -90deg at 10px 10px, #fff 90deg, #0000 0);
 }
 
+/* ---------- Hub ---------- */
+
+.hub-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  z-index: 350;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+
+.hub-card {
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #000000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  max-width: 560px;
+  width: 85vw;
+  padding: 40px 32px;
+  outline: none;
+}
+
+.hub-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #000000;
+  margin-bottom: 24px;
+}
+
+.hub-stats {
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #000000;
+}
+
+.hub-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.hub-stats .stat-row:last-child {
+  border-bottom: none;
+}
+
+.hub-stats .stat-label {
+  color: #333333;
+  font-weight: 600;
+}
+
+.hub-stats .stat-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-close {
+  margin-top: 24px;
+  font-size: 13px;
+  color: #666666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+body.dark-mode .hub-overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+body.dark-mode .hub-card {
+  background: #111111;
+  border: 1px solid #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+body.dark-mode .hub-title {
+  color: #ffffff;
+}
+
+body.dark-mode .hub-stats {
+  color: #ffffff;
+}
+
+body.dark-mode .hub-stats .stat-row {
+  border-bottom-color: #444444;
+}
+
+body.dark-mode .hub-stats .stat-label {
+  color: #aaaaaa;
+}
+
+body.dark-mode .hub-close {
+  color: #888888;
+}
+
 /* ---------- Mobile ---------- */
 
 @media (pointer: coarse) {
