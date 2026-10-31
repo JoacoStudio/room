@@ -146,19 +146,6 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
-  // Guardar al desmontar
-  useEffect(() => {
-    return () => {
-      if (notes[activeIndex] && !readOnly) {
-        const updated = [...notes];
-        updated[activeIndex] = { ...updated[activeIndex], body: noteText, updated: Date.now() };
-        setNotes(updated);
-        saveNotes(updated);
-        saveActiveIndex(activeIndex);
-      }
-    };
-  }, [activeIndex, noteText, readOnly, notes]);
-
   // Inicializar hint después de cargar notas
   useEffect(() => {
     if (notes.length === 0) return;

@@ -1,47 +1,58 @@
-import React from 'react';
-import { Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 export default function UndoToast({ visible, onUndo, onHide }) {
-  const anim = Animated.useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(false);
+  const [style, setStyle] = useState({ opacity: 0, translateY: 60 });
+  const timerRef = useRef({});
 
-  React.useEffect(() => {
-    if (visible) {
-      anim.setValue(0);
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-      const timer = setTimeout(() => {
-        Animated.timing(anim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }).start(() => onHide());
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-    anim.setValue(0);
-  }, [visible, anim, onHide]);
+  useEffect(() => {
+    // Limpiar timers previos
+    Object.values(timerRef.current).forEach(clearTimeout);
+    timerRef.current = {};
 
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [60, 0],
-  });
-  const opacity = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
+    const apply = () => {
+      if (visible) {
+        setMounted(true);
+        setStyle({ opacity: 0, translateY: 60 });
 
-  if (!visible && anim._value === 0) return null;
+        timerRef.current.t1 = setTimeout(() => {
+          setStyle({ opacity: 1, translateY: 0 });
+        }, 10);
+
+        timerRef.current.t2 = setTimeout(() => {
+          setStyle({ opacity: 0, translateY: 60 });
+          timerRef.current.t3 = setTimeout(() => {
+            onHide();
+            setMounted(false);
+          }, 250);
+        }, 5000);
+      } else {
+        setStyle({ opacity: 0, translateY: 60 });
+        setMounted(false);
+      }
+    };
+
+    timerRef.current.apply = setTimeout(apply, 0);
+
+    return () => {
+      clearTimeout(timerRef.current.apply);
+      Object.values(timerRef.current).forEach(clearTimeout);
+      timerRef.current = {};
+    };
+  }, [visible, onHide]);
+
+  if (!visible && !mounted) return null;
+
+  const { opacity, translateY } = style;
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateY }], opacity }]}>
+    <View style={[styles.container, { opacity, transform: [{ translateY }] }]}>
       <Text style={styles.text}>Nota eliminada</Text>
       <TouchableOpacity style={styles.btn} onPress={onUndo}>
         <Text style={styles.btnText}>Deshacer</Text>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 }
 
