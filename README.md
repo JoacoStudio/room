@@ -31,7 +31,7 @@ Room/
 | Alt + I | Importar notas desde archivo |
 | Alt + R | Modo lectura / escritura |
 | Alt + O | Tema: claro / oscuro / sistema |
-| Alt + 2 | Hub de estadísticas |
+| Alt + 2 | Hub de estadísticas (pantalla completa) |
 | Alt + X | Ayuda de atajos |
 
 ## Gestos en mobile
@@ -64,6 +64,17 @@ Room lee automáticamente las expresiones que escribís en la nota. Al terminar 
 | `17 % 5 =` | `17 % 5 = 2` |
 
 Operaciones soportadas: `+`, `-`, `*`, `/`, `%` (módulo), `^` (potencia) y `√` (raíz cuadrada), con paréntesis `()` para agrupar. Si lo que escribís antes de `=` no es una expresión válida, se deja tal cual.
+
+## Hub de estadísticas
+
+Presioná **Alt + 2** para abrir el Hub, una pantalla completa con información de tu uso de la app. Presioná `Alt + 2` otra vez o `Escape` para cerrar.
+
+El Hub tiene dos pestañas:
+
+- **Resumen**: notas totales, palabras escritas, caracteres escritos, ritmo aproximado (palabras/min), días activos, notas creadas y eliminadas.
+- **Gráficos**: barras con las palabras escritas por día (últimos 14 días) y una cuadrícula con los días activos.
+
+Las estadísticas se guardan en el almacenamiento local del navegador y se actualizan mientras escribís.
 
 ## Cómo usar
 

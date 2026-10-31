@@ -84,8 +84,29 @@
 
 <div id="hubOverlay" class="hub-overlay" role="dialog" aria-modal="true" aria-labelledby="hubTitle" aria-hidden="true">
   <div class="hub-card" tabindex="-1">
-    <h1 class="hub-title" id="hubTitle">Hub</h1>
-    <div class="hub-stats" id="hubStats"></div>
+    <div class="hub-header">
+      <h1 class="hub-title" id="hubTitle">Hub</h1>
+      <div class="hub-tabs">
+        <button class="hub-tab active" data-tab="summary">Resumen</button>
+        <button class="hub-tab" data-tab="charts">Gráficos</button>
+      </div>
+    </div>
+    <div class="hub-content">
+      <section class="hub-section active" id="hubSummary">
+        <div class="hub-stats" id="hubStats"></div>
+        <div class="hub-notes" id="hubNotes"></div>
+      </section>
+      <section class="hub-section" id="hubCharts">
+        <div class="chart-card">
+          <h3 class="chart-title">Palabras por día</h3>
+          <canvas id="chartDaily" width="520" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">Días activos</h3>
+          <canvas id="chartStreak" width="520" height="200"></canvas>
+        </div>
+      </section>
+    </div>
     <p class="hub-close help-desktop">Presiona Alt + 2 para cerrar</p>
     <p class="hub-close help-mobile">Toca para cerrar</p>
   </div>

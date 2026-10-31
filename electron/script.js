@@ -152,7 +152,20 @@ function toggleTheme() {
 function loadStats() {
   try {
     const raw = localStorage.getItem(STATS_KEY);
-    if (raw) stats = JSON.parse(raw);
+    if (raw) {
+      stats = JSON.parse(raw);
+      if (!stats.dailyWords) stats.dailyWords = {};
+    } else {
+      stats = {
+        wordsTotal: 0,
+        charsTotal: 0,
+        notesCreated: 0,
+        notesDeleted: 0,
+        daysActive: [],
+        lastActivity: null,
+        dailyWords: {}
+      };
+    }
   } catch (e) {
     stats = {
       wordsTotal: 0,
@@ -161,7 +174,7 @@ function loadStats() {
       notesDeleted: 0,
       daysActive: [],
       lastActivity: null,
-      lastNotes: []
+      dailyWords: {}
     };
   }
 }
@@ -178,12 +191,16 @@ function recordTyping() {
   const chars = text.length;
 
   const today = new Date().toDateString();
+  if (!stats.dailyWords) stats.dailyWords = {};
+  stats.dailyWords[today] = words;
+
   if (!stats.daysActive.includes(today)) {
     stats.daysActive.push(today);
+    stats.daysActive.sort();
   }
 
   stats.lastActivity = Date.now();
-  stats.wordsTotal = Math.max(stats.wordsTotal, words);
+  stats.wordsTotal = Object.values(stats.dailyWords || {}).reduce((a, b) => a + b, 0);
   stats.charsTotal = Math.max(stats.charsTotal, chars);
 
   saveStats();
@@ -217,8 +234,9 @@ function calculateWPM() {
 }
 
 function renderHubStats() {
-  const container = document.getElementById('hubStats');
-  if (!container) return;
+  const statsContainer = document.getElementById('hubStats');
+  const notesContainer = document.getElementById('hubNotes');
+  if (!statsContainer || !notesContainer) return;
 
   const totalWords = stats.wordsTotal;
   const totalChars = stats.charsTotal;
@@ -236,30 +254,121 @@ function renderHubStats() {
     <div class="stat-row"><span class="stat-label">Notas eliminadas</span><span class="stat-value">${stats.notesDeleted}</span></div>
   `;
 
-  if (lastNotes.length > 0) {
-    html += `<div class="stat-row" style="border-top: 2px solid #000000; padding-top: 10px; margin-top: 10px;">`;
-    html += `<span class="stat-label">Últimas notas</span>`;
-    html += `<ul class="stat-list" style="margin: 4px 0 0 0; padding-left: 16px; text-align: left;">`;
-    lastNotes.forEach((t) => {
-      html += `<li style="margin: 2px 0; font-size: 14px;">"${t}"</li>`;
-    });
-    html += `</ul></div>`;
-  }
+  statsContainer.innerHTML = html;
 
-  container.innerHTML = html;
+  let notesHtml = '<h3>Últimas notas</h3><ul>';
+  if (lastNotes.length > 0) {
+    lastNotes.forEach((t) => {
+      notesHtml += `<li style="margin: 2px 0; font-size: 14px;">"${t}"</li>`;
+    });
+  } else {
+    notesHtml += '<li style="color:#666666;font-size:14px;">Sin notas aún</li>';
+  }
+  notesHtml += '</ul>';
+  notesContainer.innerHTML = notesHtml;
 }
 
-function toggleHub() {
-  const show = hubOverlay.style.display !== 'flex';
+function toggleHub(force) {
+  const show = typeof force === 'boolean' ? force : hubOverlay.style.display !== 'flex';
   hubOverlay.style.display = show ? 'flex' : 'none';
-  hubOverlay.setAttribute('aria-hidden', String(!show));
+  hubOverlay.classList.toggle('open', show);
+  document.body.classList.toggle('hub-active', show);
   hubOpen = show;
   if (show) {
     note.blur();
     renderHubStats();
+    renderHubCharts();
+    setupHubTabs();
   } else {
     note.focus();
   }
+}
+
+/* ---------- Hub: pestañas ---------- */
+
+function setupHubTabs() {
+  const tabs = document.querySelectorAll('.hub-tab');
+  const sections = document.querySelectorAll('.hub-section');
+
+  tabs.forEach((tab) => {
+    tab.onclick = () => {
+      tabs.forEach((t) => t.classList.remove('active'));
+      sections.forEach((s) => s.classList.remove('active'));
+      tab.classList.add('active');
+      const id = 'hub' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1);
+      document.getElementById(id).classList.add('active');
+      if (tab.dataset.tab === 'charts') {
+        renderHubCharts();
+      }
+    };
+  });
+}
+
+/* ---------- Hub: gráficos con Canvas ---------- */
+
+function renderHubCharts() {
+  const dailyCanvas = document.getElementById('chartDaily');
+  const streakCanvas = document.getElementById('chartStreak');
+  if (!dailyCanvas || !streakCanvas) return;
+
+  const dailyCtx = dailyCanvas.getContext('2d');
+  const streakCtx = streakCanvas.getContext('2d');
+
+  dailyCtx.clearRect(0, 0, dailyCanvas.width, dailyCanvas.height);
+  streakCtx.clearRect(0, 0, streakCanvas.width, streakCanvas.height);
+
+  const dailyWords = stats.dailyWords || {};
+  const dates = Object.keys(dailyWords).sort();
+  const values = dates.map((d) => dailyWords[d] || 0);
+
+  // Gráfico de barras: palabras por día
+  dailyCtx.fillStyle = '#000000';
+  dailyCtx.font = '12px Nunito Sans, sans-serif';
+  dailyCtx.textAlign = 'center';
+
+  if (dates.length > 0) {
+    const maxVal = Math.max(...values, 1);
+    const barWidth = 28;
+    const gap = 12;
+    const chartHeight = dailyCanvas.height - 50;
+
+    dates.forEach((date, i) => {
+      const x = 20 + i * (barWidth + gap) + barWidth / 2;
+      const barHeight = (values[i] / maxVal) * chartHeight;
+      const y = dailyCanvas.height - 30 - barHeight;
+
+      dailyCtx.fillRect(x - barWidth / 2, y, barWidth, barHeight);
+      dailyCtx.fillText(values[i], x, y - 6);
+
+      const label = date.slice(5); // MM-DD
+      dailyCtx.fillText(label, x, dailyCanvas.height - 14);
+    });
+
+    dailyCtx.fillText('Palabras escritas por día', dailyCanvas.width / 2, 16);
+  } else {
+    dailyCtx.fillText('Sin actividad aún', dailyCanvas.width / 2, dailyCanvas.height / 2);
+  }
+
+  // Gráfico: días activos (cuadrícula simple de los últimos 14 días)
+  streakCtx.fillStyle = '#000000';
+  streakCtx.font = '12px Nunito Sans, sans-serif';
+  streakCtx.textAlign = 'center';
+  streakCtx.fillText(`Días activos: ${stats.daysActive.length}`, streakCanvas.width / 2, 24);
+
+  const cellSize = 26;
+  const cellGap = 8;
+  const startX = 20;
+  const startY = streakCanvas.height - 80;
+
+  const recentDays = stats.daysActive.slice(-14);
+  recentDays.forEach((date, i) => {
+    const x = startX + i * (cellSize + cellGap);
+    const y = startY;
+    streakCtx.fillStyle = '#000000';
+    streakCtx.fillRect(x, y, cellSize, cellSize);
+    streakCtx.fillStyle = '#ffffff';
+    streakCtx.fillText(date.slice(5), x + cellSize / 2, y + cellSize / 2 + 5);
+  });
 }
 
 startClock();
