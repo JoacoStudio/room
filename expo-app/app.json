@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Room",
+    "slug": "room",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.joacostudio.room"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.joacostudio.room"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
