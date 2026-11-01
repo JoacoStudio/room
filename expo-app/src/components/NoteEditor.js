@@ -151,7 +151,10 @@ export default function NoteEditor({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.editorWrap} {...swipeResponder.panHandlers}>
+      <View
+        style={[styles.editorWrap, { maxHeight: Math.round(windowHeight * 0.6) }]}
+        {...swipeResponder.panHandlers}
+      >
         <TextInput
           ref={inputRef}
           style={styles.editor}
@@ -177,7 +180,6 @@ const styles = StyleSheet.create({
   },
   editorWrap: {
     flex: 1,
-    maxHeight: Math.round(windowHeight * 0.6),
   },
   editor: {
     flex: 1,

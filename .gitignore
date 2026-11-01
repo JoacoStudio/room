@@ -3,6 +3,7 @@ dist/
 electron/build/
 electron/dist/
 package-lock.json
+*.env
 *.exe
 *.lnk
 .git/
