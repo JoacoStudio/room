@@ -3,8 +3,6 @@ import {
   TextInput,
   View,
   StyleSheet,
-  PanResponder,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
   useWindowDimensions,
@@ -13,68 +11,73 @@ import {
 import { evaluate, formatResult } from '../utils/arithmetic';
 
 /**
- * Crea un PanResponder para el editor de notas.
+ * Detecta gestos táctiles manualmente sobre el TextInput.
+ * Permite escribir y seleccionar texto normalmente, pero detecta swipes
+ * para navegar entre notas y cerrar el teclado.
  *
  * Reglas:
- * - Toque corto (< 10px): NO captura, va al TextInput (escribir / seleccionar)
+ * - Toque corto (< 10px): va al TextInput (escribir / seleccionar)
  * - Swipe horizontal (izquierda/derecha): navega entre notas
  * - Swipe hacia abajo: cierra el teclado
- * - Swipe hacia arriba: se deja al texto (scroll)
  */
-function makeEditorSwipeResponder({
+function useEditorGestures({
   onSwipeLeft,
   onSwipeRight,
   onCloseKeyboard,
   atFirst,
   atLast,
 }) {
-  return PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (e, gestureState) => {
-      const dx = gestureState.dx;
-      const dy = gestureState.dy;
-      return Math.abs(dx) > 10 || Math.abs(dy) > 10;
+  const startRef = useRef({ x: 0, y: 0, time: 0 });
+  const axisRef = useRef(null); // 'x' | 'y' | null
+
+  const onTouchStart = useCallback(
+    (e) => {
+      startRef.current = {
+        x: e.nativeEvent.locationX,
+        y: e.nativeEvent.locationY,
+        time: Date.now(),
+      };
+      axisRef.current = null;
     },
-    onPanResponderGrant: (e, gestureState) => {
-      gestureState._axis = null;
-      gestureState._startTime = Date.now();
-      gestureState._moved = false;
-      gestureState._cancelled = false;
-    },
-    onPanResponderMove: (e, gestureState) => {
-      const dx = gestureState.dx;
-      const dy = gestureState.dy;
+    []
+  );
+
+  const onTouchMove = useCallback(
+    (e) => {
+      const dx = e.nativeEvent.locationX - startRef.current.x;
+      const dy = e.nativeEvent.locationY - startRef.current.y;
       const now = Date.now();
 
-      if (gestureState._axis === null) {
+      if (axisRef.current === null) {
         if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-        if (now - gestureState._startTime > 350) {
-          gestureState._cancelled = true;
-          return;
-        }
-        gestureState._axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-        gestureState._moved = true;
+        if (now - startRef.current.time > 350) return;
+        axisRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
       }
 
-      if (gestureState._axis === 'x' || (gestureState._axis === 'y' && dy > 0)) {
+      if (axisRef.current === 'x') {
         e.preventDefault();
       }
     },
-    onPanResponderRelease: (e, gestureState) => {
-      if (!gestureState._moved || gestureState._cancelled) return;
+    []
+  );
 
-      const dx = gestureState.dx;
-      const dy = gestureState.dy;
-      const elapsed = Math.max(1, Date.now() - gestureState._startTime);
+  const onTouchEnd = useCallback(
+    (e) => {
+      if (axisRef.current === null) return;
 
-      if (gestureState._axis === 'x') {
-        const velocity = Math.abs(dx) / elapsed;
+      const dx = e.nativeEvent.locationX - startRef.current.x;
+      const dy = e.nativeEvent.locationY - startRef.current.y;
+      const elapsed = Math.max(1, Date.now() - startRef.current.time);
+      const velocity = Math.abs(dx) / elapsed;
+
+      if (axisRef.current === 'x') {
         const minPx = 120;
         const thresholdPct = 0.25;
         const velocityThreshold = 0.45;
         const width = 300;
         const passed =
-          Math.abs(dx) > Math.min(minPx, width * thresholdPct) || velocity > velocityThreshold;
+          Math.abs(dx) > Math.min(minPx, width * thresholdPct) ||
+          velocity > velocityThreshold;
 
         if (dx < 0) {
           if (passed && !atLast && typeof onSwipeLeft === 'function') {
@@ -85,17 +88,20 @@ function makeEditorSwipeResponder({
             onSwipeRight();
           }
         }
-      } else if (gestureState._axis === 'y' && dy > 0) {
-        const velocity = Math.abs(dy) / elapsed;
-        const passedY = Math.abs(dy) > 60 || velocity > 0.4;
+      } else if (axisRef.current === 'y' && dy > 0) {
+        const velocityY = Math.abs(dy) / elapsed;
+        const passedY = Math.abs(dy) > 60 || velocityY > 0.4;
         if (passedY && typeof onCloseKeyboard === 'function') {
           onCloseKeyboard();
         }
       }
+
+      axisRef.current = null;
     },
-    onPanResponderTerminate: () => {},
-    onPanResponderTerminationRequest: () => false,
-  });
+    [onSwipeLeft, onSwipeRight, onCloseKeyboard, atFirst, atLast]
+  );
+
+  return { onTouchStart, onTouchMove, onTouchEnd };
 }
 
 export default function NoteEditor({
@@ -110,15 +116,17 @@ export default function NoteEditor({
   const inputRef = useRef(null);
   const { height: windowHeight } = useWindowDimensions();
 
-  const swipeResponder = useMemo(() => {
-    return makeEditorSwipeResponder({
-      onSwipeLeft,
-      onSwipeRight,
-      onCloseKeyboard: () => Keyboard.dismiss(),
-      atFirst,
-      atLast,
-    });
-  }, [onSwipeLeft, onSwipeRight, atFirst, atLast]);
+  const gestures = useMemo(
+    () =>
+      useEditorGestures({
+        onSwipeLeft,
+        onSwipeRight,
+        onCloseKeyboard: () => Keyboard.dismiss(),
+        atFirst,
+        atLast,
+      }),
+    [onSwipeLeft, onSwipeRight, atFirst, atLast]
+  );
 
   const checkArithmetic = useCallback((text) => {
     const lines = text.split('\n');
@@ -147,14 +155,8 @@ export default function NoteEditor({
   }, [onChange, checkArithmetic]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View
-        style={[styles.editorWrap, { maxHeight: Math.round(windowHeight * 0.6) }]}
-        {...swipeResponder.panHandlers}
-      >
+    <View style={styles.container}>
+      <View style={[styles.editorWrap, { maxHeight: Math.round(windowHeight * 0.6) }]}>
         <TextInput
           ref={inputRef}
           style={styles.editor}
@@ -168,9 +170,12 @@ export default function NoteEditor({
           autoCorrect={false}
           placeholder="Escribe aquí..."
           placeholderTextColor="#999999"
+          onTouchStart={gestures.onTouchStart}
+          onTouchMove={gestures.onTouchMove}
+          onTouchEnd={gestures.onTouchEnd}
         />
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
