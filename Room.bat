@@ -20,9 +20,9 @@ if not defined BROWSER if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\
 if not defined BROWSER if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "BROWSER=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
 
 if not defined BROWSER (
-    start "" "index.html"
+    start "" "src\index.html"
     exit /b
 )
 
 :: Abrir en modo aplicacion y ajustar la ventana
-start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0Room.ps1" -Browser "%BROWSER%" -Url "file:///%~dp0index.html" -Width %WIN_W% -Height %WIN_H% -Top %WIN_TOP%
+start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0Room.ps1" -Browser "%BROWSER%" -Url "file:///%~dp0src/index.html" -Width %WIN_W% -Height %WIN_H% -Top %WIN_TOP%

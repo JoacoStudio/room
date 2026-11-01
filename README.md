@@ -6,14 +6,27 @@ Organizador de notas minimalista. Blanco y negro, sin botones en la nota: teclad
 
 ```
 Room/
-├── index.html          # Entrada principal
-├── style.css           # Estilos (B/N, minimalista)
-├── script.js           # Lógica de notas y atajos
-├── src/
+├── src/                # Núcleo web compartido (única fuente de verdad)
+│   ├── index.html      # Entrada principal
+│   ├── style.css       # Estilos (B/N, minimalista)
+│   ├── script.js       # Lógica de notas y atajos
 │   └── Ic.ico          # Icono de la app
+├── electron/           # Escritorio (Electron, solo lo específico)
+│   ├── main.js
+│   ├── preload.js
+│   ├── package.json
+│   └── src/Ic.ico      # Ícono de la app Electron
+├── expo-app/           # Móvil (Expo SDK 58, React Native)
+│   ├── App.js
+│   ├── src/
+│   ├── package.json
+│   └── ...
+├── package.json        # Scripts unificados (raíz)
 ├── Room.bat            # Acceso rápido Windows
 ├── Room.ps1            # Abre y posiciona la ventana
 ├── INSTALAR-DESKTOP.md # Instrucciones de instalación
+├── SUPABASE_SETUP.md
+├── .gitignore
 └── README.md           # Este archivo
 ```
 

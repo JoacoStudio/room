@@ -1,5 +1,8 @@
 node_modules/
 dist/
+electron/build/
+electron/dist/
+package-lock.json
 *.exe
 *.lnk
 .git/

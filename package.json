@@ -1,0 +1,20 @@
+{
+  "name": "room",
+  "version": "1.0.0",
+  "description": "Organizador de notas minimalista (blanco y negro, sin botones en la nota)",
+  "scripts": {
+    "start": "npm run start:electron",
+    "start:web": "start src\\index.html",
+    "start:electron": "cd electron && electron .",
+    "pack": "cd electron && npm run pack",
+    "dist": "cd electron && npm run dist"
+  },
+  "keywords": [
+    "notas",
+    "minimalista",
+    "electron",
+    "expo"
+  ],
+  "author": "",
+  "license": "MIT"
+}
