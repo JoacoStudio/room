@@ -114,7 +114,7 @@ function mergeNotes(localNotes, remoteNotes) {
  */
 function makeTopZoneResponder({ onPullDown }) {
   return PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
+    onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (e, gs) => Math.abs(gs.dx) > 10 || Math.abs(gs.dy) > 10,
     onPanResponderGrant: (e, gs) => {
       gs._axis = null;
@@ -152,7 +152,7 @@ function makeBarResponder({
   onSwipeRight,
 }) {
   return PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
+    onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (e, gs) => Math.abs(gs.dx) > 10 || Math.abs(gs.dy) > 10,
     onPanResponderGrant: (e, gs) => {
       gs._axis = null;
