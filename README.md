@@ -105,6 +105,31 @@ Para respaldar tus notas:
 
 Recomendación: exporta tu respaldo periódicamente, especialmente antes de borrar el caché del navegador o cambiar de equipo.
 
+## Sincronización entre dispositivos (E2E)
+
+Room puede sincronizar tus notas entre web, escritorio (Electron) y móvil (Expo) de forma privada. El cifrado es de extremo a extremo: solo vos podés leer tus notas, nunca el servidor.
+
+### Cómo activarlo
+
+1. Crea un proyecto en [Supabase](https://supabase.com) y activa Auth (email/password).
+2. Ejecuta el SQL de `supabase/schema.sql` en el editor SQL de Supabase para crear la tabla `notes` con RLS.
+3. Copia `.env.example` a `.env` y completa `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (web/Electron) y `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (Expo) con los valores de tu proyecto Supabase.
+4. Inicia la app e ingresá tu correo y contraseña.
+
+### Seguridad importante
+
+- Tus notas se cifran en tu dispositivo con una clave derivada de tu contraseña (AES-GCM + PBKDF2).
+- El servidor nunca recibe el texto plano de tus notas.
+- **Si olvidás tu contraseña, no se podrán recuperar las notas.** No hay mecanismo de recuperación por diseño.
+
+### Estado de sincronización
+
+En la barra de estado aparece un indicador:
+- **Sin sincronizar**: no hay sesión activa
+- **Sincronizando...**: subiendo o descargando notas
+- **Sincronizado**: todo al día
+- **Error de sincronización**: fallo de red o de autenticación
+
 ## Accesibilidad
 
 - El área de escritura tiene etiqueta ARIA para lectores de pantalla.
