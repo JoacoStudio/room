@@ -3,6 +3,7 @@ import {
   TextInput,
   View,
   StyleSheet,
+  PanResponder,
   Platform,
   Keyboard,
   useWindowDimensions,
@@ -11,16 +12,12 @@ import {
 import { evaluate, formatResult } from '../utils/arithmetic';
 
 /**
- * Detecta gestos táctiles manualmente sobre el TextInput.
- * Permite escribir y seleccionar texto normalmente, pero detecta swipes
- * para navegar entre notas y cerrar el teclado.
- *
- * Reglas:
- * - Toque corto (< 10px): va al TextInput (escribir / seleccionar)
- * - Swipe horizontal (izquierda/derecha): navega entre notas
- * - Swipe hacia abajo: cierra el teclado
+ * Crea un PanResponder para el editor de notas.
+ * El responder vive en un View envolvente alrededor del TextInput.
+ * Toques cortos (< 14px) dejan que el TextInput maneje el evento (escribir / seleccionar).
+ * Swipes horizontales navegan entre notas. Swipe hacia abajo cierra el teclado.
  */
-function useEditorGestures({
+function makeEditorSwipeResponder({
   onSwipeLeft,
   onSwipeRight,
   onCloseKeyboard,
@@ -28,49 +25,51 @@ function useEditorGestures({
   atLast,
 }) {
   const startRef = useRef({ x: 0, y: 0, time: 0 });
-  const axisRef = useRef(null); // 'x' | 'y' | null
+  const axisRef = useRef(null);
 
-  const onTouchStart = useCallback(
-    (e) => {
-      startRef.current = {
-        x: e.nativeEvent.locationX,
-        y: e.nativeEvent.locationY,
-        time: Date.now(),
-      };
-      axisRef.current = null;
+  return PanResponder.create({
+    onStartShouldSetPanResponder: (e, gs) => false,
+    onMoveShouldSetPanResponder: (e, gs) => {
+      const dx = Math.abs(gs.dx);
+      const dy = Math.abs(gs.dy);
+      return dx > 14 || dy > 14;
     },
-    []
-  );
-
-  const onTouchMove = useCallback(
-    (e) => {
-      const dx = e.nativeEvent.locationX - startRef.current.x;
-      const dy = e.nativeEvent.locationY - startRef.current.y;
+    onPanResponderGrant: (e, gs) => {
+      startRef.current = { x: 0, y: 0, time: Date.now() };
+      axisRef.current = null;
+      gs._axis = null;
+      gs._moved = false;
+      gs._startTime = Date.now();
+      gs._cancelled = false;
+    },
+    onPanResponderMove: (e, gs) => {
+      const dx = gs.dx;
+      const dy = gs.dy;
       const now = Date.now();
 
-      if (axisRef.current === null) {
+      if (gs._axis === null) {
         if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-        if (now - startRef.current.time > 350) return;
-        axisRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (now - gs._startTime > 350) {
+          gs._cancelled = true;
+          return;
+        }
+        gs._axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        gs._moved = true;
       }
 
-      if (axisRef.current === 'x') {
+      if (gs._axis === 'x') {
         e.preventDefault();
       }
     },
-    []
-  );
+    onPanResponderRelease: (e, gs) => {
+      if (!gs._moved || gs._cancelled) return;
 
-  const onTouchEnd = useCallback(
-    (e) => {
-      if (axisRef.current === null) return;
+      const dx = gs.dx;
+      const dy = gs.dy;
+      const elapsed = Math.max(1, Date.now() - gs._startTime);
 
-      const dx = e.nativeEvent.locationX - startRef.current.x;
-      const dy = e.nativeEvent.locationY - startRef.current.y;
-      const elapsed = Math.max(1, Date.now() - startRef.current.time);
-      const velocity = Math.abs(dx) / elapsed;
-
-      if (axisRef.current === 'x') {
+      if (gs._axis === 'x') {
+        const velocity = Math.abs(dx) / elapsed;
         const minPx = 120;
         const thresholdPct = 0.25;
         const velocityThreshold = 0.45;
@@ -88,20 +87,17 @@ function useEditorGestures({
             onSwipeRight();
           }
         }
-      } else if (axisRef.current === 'y' && dy > 0) {
+      } else if (gs._axis === 'y' && dy > 0) {
         const velocityY = Math.abs(dy) / elapsed;
         const passedY = Math.abs(dy) > 60 || velocityY > 0.4;
         if (passedY && typeof onCloseKeyboard === 'function') {
           onCloseKeyboard();
         }
       }
-
-      axisRef.current = null;
     },
-    [onSwipeLeft, onSwipeRight, onCloseKeyboard, atFirst, atLast]
-  );
-
-  return { onTouchStart, onTouchMove, onTouchEnd };
+    onPanResponderTerminate: () => {},
+    onPanResponderTerminationRequest: () => false,
+  });
 }
 
 export default function NoteEditor({
@@ -116,19 +112,18 @@ export default function NoteEditor({
   const inputRef = useRef(null);
   const { height: windowHeight } = useWindowDimensions();
 
-  const gestures = useMemo(
-    () =>
-      useEditorGestures({
-        onSwipeLeft,
-        onSwipeRight,
-        onCloseKeyboard: () => Keyboard.dismiss(),
-        atFirst,
-        atLast,
-      }),
-    [onSwipeLeft, onSwipeRight, atFirst, atLast]
-  );
+  const swipeResponder = useMemo(() => {
+    return makeEditorSwipeResponder({
+      onSwipeLeft,
+      onSwipeRight,
+      onCloseKeyboard: () => Keyboard.dismiss(),
+      atFirst,
+      atLast,
+    });
+  }, [onSwipeLeft, onSwipeRight, atFirst, atLast]);
 
   const checkArithmetic = useCallback((text) => {
+    if (!text) return;
     const lines = text.split('\n');
     const lastLine = lines[lines.length - 1];
     const trimmed = lastLine.trimEnd();
@@ -156,11 +151,14 @@ export default function NoteEditor({
 
   return (
     <View style={styles.container}>
-      <View style={[styles.editorWrap, { maxHeight: Math.round(windowHeight * 0.6) }]}>
+      <View
+        style={[styles.editorWrap, { maxHeight: Math.round(windowHeight * 0.6) }]}
+        {...swipeResponder.panHandlers}
+      >
         <TextInput
           ref={inputRef}
           style={styles.editor}
-          value={note}
+          value={note || ''}
           onChangeText={handleChangeText}
           editable={!readOnly}
           multiline
@@ -170,9 +168,6 @@ export default function NoteEditor({
           autoCorrect={false}
           placeholder="Escribe aquí..."
           placeholderTextColor="#999999"
-          onTouchStart={gestures.onTouchStart}
-          onTouchMove={gestures.onTouchMove}
-          onTouchEnd={gestures.onTouchEnd}
         />
       </View>
     </View>

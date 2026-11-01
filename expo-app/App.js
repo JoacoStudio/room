@@ -224,12 +224,13 @@ export default function App() {
     async function init() {
       const loadedNotes = await loadNotes();
       if (!mounted) return;
-      setNotes(loadedNotes);
-      const idx = await getSavedIndex(loadedNotes);
+      const safeNotes = Array.isArray(loadedNotes) ? loadedNotes : [];
+      setNotes(safeNotes);
+      const idx = await getSavedIndex(safeNotes);
       if (!mounted) return;
       setActiveIndex(idx);
-      if (loadedNotes.length > 0) {
-        setNoteText(loadedNotes[idx].body || '');
+      if (safeNotes.length > 0) {
+        setNoteText(safeNotes[idx]?.body || '');
       }
 
       // Restaurar sesión de Supabase si existe
