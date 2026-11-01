@@ -476,10 +476,11 @@ body.dark-mode .loader {
   }
 
   textarea#note {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     width: 100%;
-    height: auto;
-    min-height: 0;
+    height: 60dvh;
+    max-height: 70dvh;
+    min-height: 40dvh;
     max-width: none;
     font-size: 20px;
     line-height: 1.65;

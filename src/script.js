@@ -19,6 +19,16 @@ const ACTIVE_KEY = 'room_active_index';
 const THEME_KEY = 'room_theme';
 const THEMES = ['auto', 'dark', 'light'];
 const STATS_KEY = 'room_stats';
+const SYNC_ENABLED_KEY = 'room_sync_enabled';
+const CURRENT_USER_KEY = 'room_current_user';
+
+/* ---------- Estado de sincronización ---------- */
+
+let currentUser = null;
+let userPassword = null; // solo en memoria, nunca se guarda en localStorage
+let syncStatus = 'disconnected'; // 'disconnected' | 'syncing' | 'synced' | 'error'
+let syncErrorMessage = '';
+
 const KEYS = {
   NEW: 'n',
   DELETE: 'b',
@@ -64,6 +74,259 @@ let stats = {
 
 function vibrate(ms = 10) {
   if (isCoarse && navigator.vibrate) navigator.vibrate(ms);
+}
+
+/* ---------- Sincronización con Supabase ---------- */
+
+function updateSyncStatus(status, errorMsg) {
+  syncStatus = status;
+  syncErrorMessage = errorMsg || '';
+  const el = document.getElementById('syncStatus');
+  if (el) {
+    el.textContent = syncStatusLabel();
+    el.className = 'sync-status ' + status;
+  }
+}
+
+function syncStatusLabel() {
+  const labels = {
+    disconnected: 'Sin sincronizar',
+    syncing: 'Sincronizando...',
+    synced: 'Sincronizado',
+    error: 'Error de sincronización'
+  };
+  return labels[syncStatus] || 'Desconocido';
+}
+
+async function login(email, password) {
+  if (!window.RoomSupabase || !window.RoomSupabase.isConfigured()) {
+    showStatus('Supabase no configurado');
+    return false;
+  }
+
+  const supabase = window.RoomSupabase.getSupabase();
+  if (!supabase) return false;
+
+  updateSyncStatus('syncing');
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+
+    currentUser = data.user;
+    userPassword = password;
+    localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
+    localStorage.setItem(SYNC_ENABLED_KEY, 'true');
+
+    updateSyncStatus('syncing');
+    await syncDownload();
+    updateSyncStatus('synced');
+
+    hideLoginModal();
+    showStatus('Sesión iniciada · notas sincronizadas');
+    return true;
+  } catch (err) {
+    console.error('[Room] Error al iniciar sesión:', err);
+    updateSyncStatus('error', err.message);
+    showStatus('Error al iniciar sesión: ' + (err.message || 'desconocido'));
+    return false;
+  }
+}
+
+async function signup(email, password) {
+  if (!window.RoomSupabase || !window.RoomSupabase.isConfigured()) {
+    showStatus('Supabase no configurado');
+    return false;
+  }
+
+  const supabase = window.RoomSupabase.getSupabase();
+  if (!supabase) return false;
+
+  updateSyncStatus('syncing');
+
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+
+    currentUser = data.user;
+    userPassword = password;
+    localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
+    localStorage.setItem(SYNC_ENABLED_KEY, 'true');
+
+    updateSyncStatus('syncing');
+    await syncDownload();
+    updateSyncStatus('synced');
+
+    hideLoginModal();
+    showStatus('Cuenta creada · notas sincronizadas');
+    return true;
+  } catch (err) {
+    console.error('[Room] Error al crear cuenta:', err);
+    updateSyncStatus('error', err.message);
+    showStatus('Error al crear cuenta: ' + (err.message || 'desconocido'));
+    return false;
+  }
+}
+
+async function logout() {
+  if (window.RoomSupabase && window.RoomSupabase.getSupabase()) {
+    await window.RoomSupabase.getSupabase().auth.signOut();
+  }
+
+  currentUser = null;
+  userPassword = null;
+  localStorage.removeItem(CURRENT_USER_KEY);
+  localStorage.removeItem(SYNC_ENABLED_KEY);
+  notes = [{ id: Date.now().toString(), title: '', body: '', updated: Date.now() }];
+  activeIndex = 0;
+  saveNotes();
+  updateSyncStatus('disconnected');
+
+  showLoginModal();
+  showStatus('Sesión cerrada · notas locales borradas');
+}
+
+function isLoggedIn() {
+  return !!currentUser;
+}
+
+async function encryptNoteForSync(note) {
+  if (!userPassword || !window.RoomCrypto) return note;
+
+  const encrypted = {
+    id: note.id,
+    encrypted_body: await window.RoomCrypto.encrypt(note.body || '', userPassword),
+    encrypted_title: await window.RoomCrypto.encrypt(note.title || '', userPassword),
+    updated: note.updated,
+    device_id: 'web'
+  };
+  return encrypted;
+}
+
+async function decryptNoteFromSync(encryptedNote) {
+  if (!userPassword || !window.RoomCrypto) return encryptedNote;
+
+  return {
+    id: encryptedNote.id,
+    title: await window.RoomCrypto.decrypt(encryptedNote.encrypted_title, userPassword),
+    body: await window.RoomCrypto.decrypt(encryptedNote.encrypted_body, userPassword),
+    updated: encryptedNote.updated
+  };
+}
+
+async function syncDownload() {
+  if (!isLoggedIn() || !userPassword) return;
+
+  const supabase = window.RoomSupabase.getSupabase();
+  if (!supabase) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      // No hay notas remotas, subir las locales
+      await syncUpload();
+      return;
+    }
+
+    // Descifrar notas remotas
+    const remoteNotes = [];
+    for (const encNote of data) {
+      try {
+        const note = await decryptNoteFromSync(encNote);
+        remoteNotes.push(note);
+      } catch (e) {
+        console.warn('[Room] No se pudo descifrar nota remota:', encNote.id, e);
+      }
+    }
+
+    // Fusión: last-write-wins por updated
+    const merged = mergeNotes(notes, remoteNotes);
+    notes = merged;
+    saveNotes();
+
+    if (notes.length > 0) {
+      loadNote(activeIndex, !isCoarse);
+    }
+
+    // Subir cualquier cambio local que no esté remoto
+    await syncUpload();
+  } catch (err) {
+    console.error('[Room] Error descargando notas:', err);
+    throw err;
+  }
+}
+
+async function syncUpload() {
+  if (!isLoggedIn() || !userPassword) return;
+
+  const supabase = window.RoomSupabase.getSupabase();
+  if (!supabase) return;
+
+  try {
+    for (const note of notes) {
+      const encrypted = await encryptNoteForSync(note);
+
+      const { error } = await supabase
+        .from('notes')
+        .upsert({
+          id: encrypted.id,
+          user_id: currentUser.id,
+          encrypted_body: encrypted.encrypted_body,
+          encrypted_title: encrypted.encrypted_title,
+          updated_at: new Date(encrypted.updated).toISOString(),
+          device_id: encrypted.device_id
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.error('[Room] Error subiendo notas:', err);
+    throw err;
+  }
+}
+
+/**
+ * Fusión de dos listas de notas por last-write-wins usando 'updated'.
+ */
+function mergeNotes(localNotes, remoteNotes) {
+  const map = new Map();
+
+  for (const n of localNotes) {
+    map.set(n.id, n);
+  }
+
+  for (const n of remoteNotes) {
+    const existing = map.get(n.id);
+    if (!existing || (n.updated || 0) > (existing.updated || 0)) {
+      map.set(n.id, n);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+}
+
+/* ---------- UI de login ---------- */
+
+function showLoginModal() {
+  const modal = document.getElementById('loginModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function hideLoginModal() {
+  const modal = document.getElementById('loginModal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+  }
 }
 
 function loadNotes() {
@@ -420,6 +683,12 @@ function saveActive() {
     notes[activeIndex].body = note.value;
     notes[activeIndex].updated = Date.now();
     saveNotes();
+    if (isLoggedIn()) {
+      syncUpload().catch((err) => {
+        console.error('[Room] Error subiendo nota al guardar:', err);
+        updateSyncStatus('error', err.message);
+      });
+    }
   }
 }
 
@@ -709,6 +978,12 @@ function createNote() {
   loadNote(notes.length - 1, true);
   recordNoteCreated();
   vibrate(10);
+  if (isLoggedIn()) {
+    syncUpload().catch((err) => {
+      console.error('[Room] Error subiendo nueva nota:', err);
+      updateSyncStatus('error', err.message);
+    });
+  }
 }
 
 function showUndo() {
@@ -753,6 +1028,12 @@ function deleteNote() {
   loadNote(activeIndex, !isCoarse);
   showUndo();
   vibrate(20);
+  if (isLoggedIn()) {
+    syncUpload().catch((err) => {
+      console.error('[Room] Error subiendo eliminación de nota:', err);
+      updateSyncStatus('error', err.message);
+    });
+  }
 }
 
 undoBtn.addEventListener('click', () => {
@@ -1373,6 +1654,48 @@ function hideSplash() {
 
 function initApp() {
   try {
+    // Verificar si hay una sesión de Supabase persistida y restaurarla
+    if (window.RoomSupabase && window.RoomSupabase.isConfigured()) {
+      const supabase = window.RoomSupabase.getSupabase();
+      if (supabase) {
+        // Escuchar cambios de auth para mantener currentUser actualizado
+        supabase.auth.onAuthStateChange((event, session) => {
+          if (session && session.user) {
+            currentUser = session.user;
+            localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
+            localStorage.setItem(SYNC_ENABLED_KEY, 'true');
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+              syncDownload().then(() => updateSyncStatus('synced')).catch(() => updateSyncStatus('error'));
+              hideLoginModal();
+            }
+          } else {
+            currentUser = null;
+            userPassword = null;
+            localStorage.removeItem(CURRENT_USER_KEY);
+            localStorage.removeItem(SYNC_ENABLED_KEY);
+            updateSyncStatus('disconnected');
+            showLoginModal();
+          }
+        });
+
+        const savedEmail = localStorage.getItem(CURRENT_USER_KEY);
+        const syncEnabled = localStorage.getItem(SYNC_ENABLED_KEY) === 'true';
+
+        if (savedEmail && syncEnabled) {
+          // Intentar obtener la sesión actual de Supabase
+          const { data } = supabase.auth.getSession();
+          if (data.session) {
+            currentUser = data.session.user;
+            // La contraseña no se guarda, por eso no podemos descifrar notas remotas
+            // sin que el usuario la escriba de nuevo
+            showLoginModal();
+            showStatus('Ingresá tu contraseña para sincronizar tus notas');
+            return;
+          }
+        }
+      }
+    }
+
     loadNotes();
     loadStats();
     loadNote(getSavedIndex(), !isCoarse);
@@ -1386,6 +1709,81 @@ function initApp() {
 setTimeout(hideSplash, 2500);
 
 initApp();
+
+/* ---------- Event listeners del modal de login ---------- */
+
+const loginModal = document.getElementById('loginModal');
+const loginForm = document.getElementById('loginForm');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const loginBtn = document.getElementById('loginBtn');
+const skipLoginBtn = document.getElementById('skipLoginBtn');
+const loginError = document.getElementById('loginError');
+const loginTabs = document.querySelectorAll('.login-tab');
+
+let loginMode = 'login'; // 'login' | 'signup'
+
+// Cambiar entre pestañas de login / registro
+loginTabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    loginTabs.forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    loginMode = tab.dataset.mode;
+    loginBtn.textContent = loginMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+    loginError.textContent = '';
+  });
+});
+
+// Enviar formulario de login / registro
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value.trim();
+
+  if (!email || !password) {
+    loginError.textContent = 'Completá todos los campos';
+    return;
+  }
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = loginMode === 'login' ? 'Iniciando sesión...' : 'Creando cuenta...';
+  loginError.textContent = '';
+
+  try {
+    const ok = loginMode === 'login'
+      ? await login(email, password)
+      : await signup(email, password);
+    if (ok) {
+      loginEmail.value = '';
+      loginPassword.value = '';
+    }
+  } catch (err) {
+    loginError.textContent = err.message || 'Error desconocido';
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = loginMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+  }
+});
+
+// Saltarse sincronización (usar solo localStorage)
+skipLoginBtn.addEventListener('click', () => {
+  localStorage.removeItem(SYNC_ENABLED_KEY);
+  localStorage.removeItem(CURRENT_USER_KEY);
+  hideLoginModal();
+  updateSyncStatus('disconnected');
+  showStatus('Usando almacenamiento local (sin sincronización)');
+});
+
+// Cerrar modal al hacer clic fuera del panel
+loginModal.addEventListener('click', (e) => {
+  if (e.target === loginModal) {
+    if (!isLoggedIn()) {
+      // Si no está logueado, no dejar cerrar sin elegir
+      return;
+    }
+    hideLoginModal();
+  }
+});
 
 window.addEventListener('error', (e) => {
   console.error('Error global:', e.error);

@@ -174,10 +174,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editorWrap: {
-    flex: 1,
+    height: '60%',
   },
   editor: {
-    flex: 1,
+    height: '100%',
     fontSize: 20,
     color: '#000000',
     backgroundColor: 'transparent',
