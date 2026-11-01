@@ -23,6 +23,9 @@
     "icon": "Ic.ico"
   },
   "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0"
