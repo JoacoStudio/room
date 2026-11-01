@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 
 import { evaluate, formatResult } from '../utils/arithmetic';
@@ -107,6 +108,7 @@ export default function NoteEditor({
   atLast,
 }) {
   const inputRef = useRef(null);
+  const { height: windowHeight } = useWindowDimensions();
 
   const swipeResponder = useMemo(() => {
     return makeEditorSwipeResponder({
@@ -174,10 +176,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editorWrap: {
-    height: '60%',
+    flex: 1,
+    maxHeight: Math.round(windowHeight * 0.6),
   },
   editor: {
-    height: '100%',
+    flex: 1,
     fontSize: 20,
     color: '#000000',
     backgroundColor: 'transparent',

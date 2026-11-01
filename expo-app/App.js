@@ -4,6 +4,8 @@ import {
   Text,
   StatusBar,
   PanResponder,
+  TextInput,
+  Button,
 } from 'react-native';
 import { Haptics } from 'expo-haptics';
 
@@ -19,6 +21,93 @@ import ActionSheet from './src/components/ActionSheet';
 import HelpModal from './src/components/HelpModal';
 import UndoToast from './src/components/UndoToast';
 import { StatusBarHandle } from './src/components/StatusBarHint';
+
+import { getSupabase, isConfigured } from './src/supabase';
+import { encrypt, decrypt } from './src/crypto';
+
+/**
+ * Sube una nota cifrada a Supabase.
+ */
+async function syncUploadNote(note, password, userId) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const encryptedBody = await encrypt(note.body || '', password);
+  const encryptedTitle = await encrypt(note.title || '', password);
+
+  await supabase
+    .from('notes')
+    .upsert({
+      id: note.id,
+      user_id: userId,
+      encrypted_body: encryptedBody,
+      encrypted_title: encryptedTitle,
+      updated_at: new Date(note.updated).toISOString(),
+      device_id: 'mobile',
+    }, { onConflict: 'id' });
+}
+
+/**
+ * Descarga notas cifradas de Supabase y las descifra.
+ */
+async function syncDownload(password, userId, setNotesFn, setActiveIndexFn, setNoteTextFn) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    return;
+  }
+
+  const remoteNotes = [];
+  for (const encNote of data) {
+    try {
+      const note = {
+        id: encNote.id,
+        title: await decrypt(encNote.encrypted_title, password),
+        body: await decrypt(encNote.encrypted_body, password),
+        updated: new Date(encNote.updated_at).getTime(),
+      };
+      remoteNotes.push(note);
+    } catch (_e) {
+      console.warn('[Room] No se pudo descifrar nota remota:', encNote.id);
+    }
+  }
+
+  // Fusión last-write-wins
+  const merged = mergeNotes([], remoteNotes);
+  setNotesFn(merged);
+  if (merged.length > 0) {
+    setActiveIndexFn(0);
+    setNoteTextFn(merged[0].body || '');
+  }
+}
+
+/**
+ * Fusión de dos listas de notas por last-write-wins usando 'updated'.
+ */
+function mergeNotes(localNotes, remoteNotes) {
+  const map = new Map();
+
+  for (const n of localNotes) {
+    map.set(n.id, n);
+  }
+
+  for (const n of remoteNotes) {
+    const existing = map.get(n.id);
+    if (!existing || (n.updated || 0) > (existing.updated || 0)) {
+      map.set(n.id, n);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+}
 
 /**
  * PanelResponder para la zona superior (swipe ↓ = nueva nota).
@@ -121,6 +210,10 @@ export default function App() {
   const [hint, setHint] = useState('');
   const [hintOpacity, setHintOpacity] = useState(1);
   const [hintTimer, setHintTimer] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('disconnected');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userPassword, setUserPassword] = useState(null);
+  const [passwordEntry, setPasswordEntry] = useState(false);
 
   const { resolved } = useTheme();
 
@@ -138,12 +231,49 @@ export default function App() {
       if (loadedNotes.length > 0) {
         setNoteText(loadedNotes[idx].body || '');
       }
+
+      // Restaurar sesión de Supabase si existe
+      if (isConfigured()) {
+        const supabase = getSupabase();
+        if (supabase) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            setCurrentUser(data.session.user);
+            setPasswordEntry(true);
+            return;
+          }
+        }
+      }
     }
 
     init();
 
     StatusBar.setBarStyle('dark-content');
     return () => { mounted = false; };
+  }, []);
+
+  // Escuchar cambios de auth de Supabase
+  useEffect(() => {
+    if (!isConfigured()) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session && session.user) {
+        setCurrentUser(session.user);
+        setSyncStatus('syncing');
+      } else {
+        setCurrentUser(null);
+        setUserPassword(null);
+        setSyncStatus('disconnected');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Inicializar hint después de cargar notas
@@ -159,14 +289,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notes.length, activeIndex, readOnly]);
 
-  const saveActive = useCallback(() => {
+  const saveActive = useCallback(async () => {
     if (!readOnly) {
       const updated = [...notes];
       updated[activeIndex] = { ...updated[activeIndex], body: noteText, updated: Date.now() };
       setNotes(updated);
-      saveNotes(updated);
+      await saveNotes(updated);
+      if (currentUser && userPassword) {
+        await syncUploadNote(updated[activeIndex], userPassword, currentUser.id).catch((err) => {
+          console.error('[Room] Error subiendo nota:', err);
+          setSyncStatus('error');
+        });
+      }
     }
-  }, [noteText, readOnly, activeIndex, notes]);
+  }, [noteText, readOnly, activeIndex, notes, currentUser, userPassword]);
 
   const debouncedSave = useCallback(() => {
     if (window._roomSaveTimer) clearTimeout(window._roomSaveTimer);
@@ -200,8 +336,8 @@ export default function App() {
     setHintOpacity(0.45);
   }, [notes, readOnly]);
 
-  const createNote = useCallback(() => {
-    saveActive();
+  const createNote = useCallback(async () => {
+    await saveActive();
     const newNote = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       title: '',
@@ -210,34 +346,40 @@ export default function App() {
     };
     const updated = [...notes, newNote];
     setNotes(updated);
-    saveNotes(updated);
+    await saveNotes(updated);
     setActiveIndex(updated.length - 1);
     setNoteText('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     showTransient('Nueva nota', 3000);
-  }, [notes, saveActive, showTransient]);
+    if (currentUser && userPassword) {
+      await syncUploadNote(newNote, userPassword, currentUser.id).catch((err) => {
+        console.error('[Room] Error subiendo nueva nota:', err);
+        setSyncStatus('error');
+      });
+    }
+  }, [notes, saveActive, showTransient, currentUser, userPassword]);
 
-  const goNext = useCallback(() => {
-    saveActive();
+  const goNext = useCallback(async () => {
+    await saveActive();
     const next = activeIndex < notes.length - 1 ? activeIndex + 1 : 0;
     loadNote(next);
   }, [activeIndex, notes.length, saveActive, loadNote]);
 
-  const goPrev = useCallback(() => {
-    saveActive();
+  const goPrev = useCallback(async () => {
+    await saveActive();
     const prev = activeIndex > 0 ? activeIndex - 1 : notes.length - 1;
     loadNote(prev);
   }, [activeIndex, notes.length, saveActive, loadNote]);
 
-  const deleteNote = useCallback(() => {
-    saveActive();
+  const deleteNote = useCallback(async () => {
+    await saveActive();
     if (notes.length === 0) return;
     const removed = notes.splice(activeIndex, 1)[0];
     setDeletedNote(removed);
     setDeletedIndex(activeIndex);
     const updated = [...notes];
     setNotes(updated);
-    saveNotes(updated);
+    await saveNotes(updated);
 
     if (updated.length === 0) {
       const placeholder = {
@@ -248,7 +390,7 @@ export default function App() {
       };
       const withPlaceholder = [...updated, placeholder];
       setNotes(withPlaceholder);
-      saveNotes(withPlaceholder);
+      await saveNotes(withPlaceholder);
       setDeletedPlaceholderId(placeholder.id);
       setActiveIndex(0);
       setNoteText('');
@@ -261,9 +403,15 @@ export default function App() {
     setTimeout(() => setUndoVisible(false), 5000);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     showTransient('Nota eliminada', 5000);
-  }, [notes, activeIndex, saveActive, showTransient]);
+    if (currentUser && userPassword) {
+      await syncUploadNote(updated[activeIndex], userPassword, currentUser.id).catch((err) => {
+        console.error('[Room] Error subiendo eliminación:', err);
+        setSyncStatus('error');
+      });
+    }
+  }, [notes, activeIndex, saveActive, showTransient, currentUser, userPassword]);
 
-  const undoDelete = useCallback(() => {
+  const undoDelete = useCallback(async () => {
     if (!deletedNote) return;
     const restored = deletedNote;
     const idx = deletedIndex;
@@ -283,11 +431,17 @@ export default function App() {
     }
     working.splice(Math.min(idx, working.length), 0, restored);
     setNotes(working);
-    saveNotes(working);
+    await saveNotes(working);
     setActiveIndex(Math.min(idx, working.length - 1));
     setNoteText(working[Math.min(idx, working.length - 1)]?.body || '');
     showTransient('Nota restaurada', 3000);
-  }, [deletedNote, deletedIndex, deletedPlaceholderId, notes, showTransient]);
+    if (currentUser && userPassword) {
+      await syncUploadNote(working[Math.min(idx, working.length - 1)], userPassword, currentUser.id).catch((err) => {
+        console.error('[Room] Error subiendo restauración:', err);
+        setSyncStatus('error');
+      });
+    }
+  }, [deletedNote, deletedIndex, deletedPlaceholderId, notes, showTransient, currentUser, userPassword]);
 
   const toggleReadOnly = useCallback(() => {
     setReadOnly((prev) => {
@@ -320,6 +474,21 @@ export default function App() {
   const handlePullUpFromBar = useCallback(() => openSheet(), [openSheet]);
   const handlePullDownFromBar = useCallback(() => createNote(), [createNote]);
 
+  const handlePasswordSubmit = useCallback(async (password) => {
+    if (!currentUser || !isConfigured()) return;
+    setUserPassword(password);
+    setSyncStatus('syncing');
+    try {
+      await syncDownload(password, currentUser.id, setNotes, setActiveIndex, setNoteText);
+      setSyncStatus('synced');
+      setPasswordEntry(false);
+    } catch (err) {
+      console.error('[Room] Error descargando notas:', err);
+      setSyncStatus('error');
+      setUserPassword(null);
+    }
+  }, [currentUser, setNotes, setActiveIndex, setNoteText]);
+
   const atFirst = activeIndex === 0;
   const atLast = activeIndex === notes.length - 1;
   const isDark = resolved === 'dark';
@@ -336,6 +505,35 @@ export default function App() {
       onSwipeRight: handleSwipeRight,
     });
   }, [handlePullUpFromBar, handlePullDownFromBar, handleSwipeLeft, handleSwipeRight]);
+
+  // Pantalla de entrada de contraseña para sincronización
+  if (passwordEntry && currentUser) {
+    return (
+      <View style={[isDark ? styles.dark.container : styles.light.container, { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <StatusBar style={isDark ? 'light-content' : 'dark-content'} />
+        <View style={[isDark ? styles.dark.loginCard : styles.light.loginCard, { width: '80%', maxWidth: 400 }]}>
+          <Text style={[isDark ? styles.dark.loginTitle : styles.light.loginTitle, { marginBottom: 8 }]}>Sincronizar notas</Text>
+          <Text style={[isDark ? styles.dark.loginSubtitle : styles.light.loginSubtitle, { marginBottom: 24 }]}>Ingresá tu contraseña para descifrar tus notas</Text>
+          <TextInput
+            style={[isDark ? styles.dark.loginInput : styles.light.loginInput, { marginBottom: 16 }]}
+            placeholder="Contraseña"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={handlePasswordSubmit}
+          />
+          <Text style={[isDark ? styles.dark.loginWarning : styles.light.loginWarning, { marginBottom: 20 }]}>⚠ Si olvidás tu contraseña, no se podrán recuperar las notas.</Text>
+          <Button
+            title="Descargar notas"
+            onPress={() => {
+              // Se maneja via onSubmitEditing del input; aquí queda para compatibilidad
+            }}
+          />
+          <Text style={[isDark ? styles.dark.loginSkip : styles.light.loginSkip, { marginTop: 16 }]} onPress={() => { setPasswordEntry(false); setSyncStatus('disconnected'); }}>Usar sin sincronizar</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[isDark ? styles.dark.container : styles.light.container, { flex: 1 }]}>
@@ -410,10 +608,22 @@ const styles = {
     ...baseStyles,
     container: { ...baseStyles.container, backgroundColor: '#ffffff' },
     hint: { ...baseStyles.hint, color: '#666666' },
+    loginCard: { backgroundColor: '#ffffff', borderColor: '#000000', borderWidth: 1, padding: 32, borderRadius: 8, alignItems: 'center' },
+    loginTitle: { fontSize: 28, fontWeight: '700', color: '#000000', textAlign: 'center' },
+    loginSubtitle: { fontSize: 14, color: '#333333', textAlign: 'center', lineHeight: 20 },
+    loginInput: { width: '100%', padding: 12, borderColor: '#000000', borderWidth: 1, borderRadius: 3, color: '#000000', marginBottom: 8 },
+    loginWarning: { fontSize: 12, color: '#666666', textAlign: 'center', lineHeight: 18 },
+    loginSkip: { fontSize: 13, color: '#333333', textAlign: 'center', textDecorationLine: 'underline' },
   },
   dark: {
     ...baseStyles,
     container: { ...baseStyles.container, backgroundColor: '#000000' },
     hint: { ...baseStyles.hint, color: '#888888' },
+    loginCard: { backgroundColor: '#111111', borderColor: '#ffffff', borderWidth: 1, padding: 32, borderRadius: 8, alignItems: 'center' },
+    loginTitle: { fontSize: 28, fontWeight: '700', color: '#ffffff', textAlign: 'center' },
+    loginSubtitle: { fontSize: 14, color: '#aaaaaa', textAlign: 'center', lineHeight: 20 },
+    loginInput: { width: '100%', padding: 12, borderColor: '#ffffff', borderWidth: 1, borderRadius: 3, color: '#ffffff', marginBottom: 8 },
+    loginWarning: { fontSize: 12, color: '#888888', textAlign: 'center', lineHeight: 18 },
+    loginSkip: { fontSize: 13, color: '#888888', textAlign: 'center', textDecorationLine: 'underline' },
   },
 };
