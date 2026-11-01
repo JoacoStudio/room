@@ -215,6 +215,13 @@ export default function App() {
   const [userPassword, setUserPassword] = useState(null);
   const [passwordEntry, setPasswordEntry] = useState(false);
 
+  // Asegurar que notes siempre sea un array (protección contra undefined)
+  useEffect(() => {
+    if (!Array.isArray(notes)) {
+      setNotes([]);
+    }
+  }, [notes]);
+
   const { resolved } = useTheme();
 
   // Cargar notas y tema al iniciar

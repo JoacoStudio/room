@@ -4,101 +4,11 @@ import {
   View,
   StyleSheet,
   PanResponder,
-  Platform,
   Keyboard,
   useWindowDimensions,
 } from 'react-native';
 
 import { evaluate, formatResult } from '../utils/arithmetic';
-
-/**
- * Crea un PanResponder para el editor de notas.
- * El responder vive en un View envolvente alrededor del TextInput.
- * Toques cortos (< 14px) dejan que el TextInput maneje el evento (escribir / seleccionar).
- * Swipes horizontales navegan entre notas. Swipe hacia abajo cierra el teclado.
- */
-function makeEditorSwipeResponder({
-  onSwipeLeft,
-  onSwipeRight,
-  onCloseKeyboard,
-  atFirst,
-  atLast,
-}) {
-  const startRef = useRef({ x: 0, y: 0, time: 0 });
-  const axisRef = useRef(null);
-
-  return PanResponder.create({
-    onStartShouldSetPanResponder: (e, gs) => false,
-    onMoveShouldSetPanResponder: (e, gs) => {
-      const dx = Math.abs(gs.dx);
-      const dy = Math.abs(gs.dy);
-      return dx > 14 || dy > 14;
-    },
-    onPanResponderGrant: (e, gs) => {
-      startRef.current = { x: 0, y: 0, time: Date.now() };
-      axisRef.current = null;
-      gs._axis = null;
-      gs._moved = false;
-      gs._startTime = Date.now();
-      gs._cancelled = false;
-    },
-    onPanResponderMove: (e, gs) => {
-      const dx = gs.dx;
-      const dy = gs.dy;
-      const now = Date.now();
-
-      if (gs._axis === null) {
-        if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-        if (now - gs._startTime > 350) {
-          gs._cancelled = true;
-          return;
-        }
-        gs._axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-        gs._moved = true;
-      }
-
-      if (gs._axis === 'x') {
-        e.preventDefault();
-      }
-    },
-    onPanResponderRelease: (e, gs) => {
-      if (!gs._moved || gs._cancelled) return;
-
-      const dx = gs.dx;
-      const dy = gs.dy;
-      const elapsed = Math.max(1, Date.now() - gs._startTime);
-
-      if (gs._axis === 'x') {
-        const velocity = Math.abs(dx) / elapsed;
-        const minPx = 120;
-        const thresholdPct = 0.25;
-        const velocityThreshold = 0.45;
-        const width = 300;
-        const passed =
-          Math.abs(dx) > Math.min(minPx, width * thresholdPct) ||
-          velocity > velocityThreshold;
-
-        if (dx < 0) {
-          if (passed && !atLast && typeof onSwipeLeft === 'function') {
-            onSwipeLeft();
-          }
-        } else if (dx > 0) {
-          if (passed && !atFirst && typeof onSwipeRight === 'function') {
-            onSwipeRight();
-          }
-        }
-      } else if (gs._axis === 'y' && dy > 0) {
-        const velocityY = Math.abs(dy) / elapsed;
-        const passedY = Math.abs(dy) > 60 || velocityY > 0.4;
-        if (passedY && typeof onCloseKeyboard === 'function') {
-          onCloseKeyboard();
-        }
-      }
-    },
-    onPanResponderTerminate: () => {},
-    onPanResponderTerminationRequest: () => false,
-  });
-}
 
 export default function NoteEditor({
   note,
@@ -112,13 +22,79 @@ export default function NoteEditor({
   const inputRef = useRef(null);
   const { height: windowHeight } = useWindowDimensions();
 
+  const startRef = useRef({ x: 0, y: 0, time: 0 });
+  const axisRef = useRef(null);
+
   const swipeResponder = useMemo(() => {
-    return makeEditorSwipeResponder({
-      onSwipeLeft,
-      onSwipeRight,
-      onCloseKeyboard: () => Keyboard.dismiss(),
-      atFirst,
-      atLast,
+    return PanResponder.create({
+      onStartShouldSetPanResponder: (e, gs) => false,
+      onMoveShouldSetPanResponder: (e, gs) => {
+        const dx = Math.abs(gs.dx);
+        const dy = Math.abs(gs.dy);
+        return dx > 14 || dy > 14;
+      },
+      onPanResponderGrant: (e, gs) => {
+        gs._axis = null;
+        gs._moved = false;
+        gs._startTime = Date.now();
+        gs._cancelled = false;
+        startRef.current = { x: gs.dx, y: gs.dy, time: Date.now() };
+      },
+      onPanResponderMove: (e, gs) => {
+        const dx = gs.dx;
+        const dy = gs.dy;
+        const now = Date.now();
+
+        if (gs._axis === null) {
+          if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+          if (now - startRef.current.time > 350) {
+            gs._cancelled = true;
+            return;
+          }
+          gs._axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          gs._moved = true;
+        }
+
+        if (gs._axis === 'x') {
+          e.preventDefault();
+        }
+      },
+      onPanResponderRelease: (e, gs) => {
+        if (!gs._moved || gs._cancelled) return;
+
+        const dx = gs.dx;
+        const dy = gs.dy;
+        const elapsed = Math.max(1, Date.now() - startRef.current.time);
+
+        if (gs._axis === 'x') {
+          const velocity = Math.abs(dx) / elapsed;
+          const minPx = 120;
+          const thresholdPct = 0.25;
+          const velocityThreshold = 0.45;
+          const width = 300;
+          const passed =
+            Math.abs(dx) > Math.min(minPx, width * thresholdPct) ||
+            velocity > velocityThreshold;
+
+          if (dx < 0) {
+            if (passed && !atLast && typeof onSwipeLeft === 'function') {
+              onSwipeLeft();
+            }
+          } else if (dx > 0) {
+            if (passed && !atFirst && typeof onSwipeRight === 'function') {
+              onSwipeRight();
+            }
+          }
+        } else if (gs._axis === 'y' && dy > 0) {
+          const velocityY = Math.abs(dy) / elapsed;
+          const passedY = Math.abs(dy) > 60 || velocityY > 0.4;
+          if (passedY && typeof Keyboard.dismiss === 'function') {
+            Keyboard.dismiss();
+          }
+        }
+      },
+      onPanResponderTerminate: () => {},
+      onPanResponderTerminationRequest: () => false,
     });
   }, [onSwipeLeft, onSwipeRight, atFirst, atLast]);
 
