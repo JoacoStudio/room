@@ -1,46 +1,56 @@
 // Capa de cifrado compartida para Room (web / Electron)
-// Usa Web Crypto API (crypto.subtle) disponible en navegadores modernos y Electron.
-// Cifrado: AES-GCM con clave derivada de la contraseña del usuario (PBKDF2).
-// Se anexa a window.RoomCrypto para uso sin bundler.
+// Usa crypto-js (vía CDN) para AES-CBC y Web Crypto API para bytes aleatorios y hash.
+// Compatible con expo-app/src/crypto.js usando el mismo formato.
+// Formato de salida: base64url(salt + iv + ciphertext) todo en hex concatenado.
 
 (function () {
   const ENCODER = new TextEncoder();
   const DECODER = new TextDecoder();
 
-  const ALGORITHM = 'AES-GCM';
-  const IV_LENGTH = 12;
   const SALT_LENGTH = 16;
-  const PBKDF2_ITERATIONS = 100000;
+  const IV_LENGTH = 16; // AES block size
 
   async function deriveKey(password, salt) {
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      ENCODER.encode(password),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: PBKDF2_ITERATIONS,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: ALGORITHM, length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
+    // Derivar clave: SHA-256(password + salt)
+    const saltStr = DECODER.decode(salt);
+    const hashInput = ENCODER.encode(password + saltStr);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', hashInput);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    return CryptoJS.enc.Hex.parse(hashHex);
   }
 
   function generateSalt() {
-    return crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+    const arr = new Uint8Array(SALT_LENGTH);
+    crypto.getRandomValues(arr);
+    return CryptoJS.lib.WordArray.create(arr);
   }
 
   function generateIV() {
-    return crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    const arr = new Uint8Array(IV_LENGTH);
+    crypto.getRandomValues(arr);
+    return CryptoJS.lib.WordArray.create(arr);
+  }
+
+  function toHex(wordArray) {
+    return wordArray.toString(CryptoJS.enc.Hex);
+  }
+
+  function fromHex(hex) {
+    return CryptoJS.enc.Hex.parse(hex);
+  }
+
+  function b64urlEncode(str) {
+    return btoa(str)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  function b64urlDecode(str) {
+    let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    return atob(b64);
   }
 
   async function encrypt(plaintext, password) {
@@ -48,46 +58,54 @@
     const iv = generateIV();
     const key = await deriveKey(password, salt);
 
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: ALGORITHM, iv },
-      key,
-      ENCODER.encode(plaintext)
-    );
+    const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
+      iv: iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
 
-    const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
-    combined.set(salt, 0);
-    combined.set(iv, salt.length);
-    combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
+    const saltHex = toHex(salt);
+    const ivHex = toHex(iv);
+    const ctHex = toHex(encrypted.ciphertext);
 
-    return btoa(String.fromCharCode(...combined))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    const combined = saltHex + ivHex + ctHex;
+
+    const bytes = [];
+    for (let i = 0; i < combined.length; i += 2) {
+      bytes.push(parseInt(combined.substr(i, 2), 16));
+    }
+    const binary = bytes.map((b) => String.fromCharCode(b)).join('');
+
+    return b64urlEncode(binary);
   }
 
   async function decrypt(ciphertextB64, password) {
-    let b64 = ciphertextB64.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
+    const binary = b64urlDecode(ciphertextB64);
 
-    const combined = new Uint8Array(atob(b64).split('').map((c) => c.charCodeAt(0)));
+    let hex = '';
+    for (let i = 0; i < binary.length; i++) {
+      hex += binary.charCodeAt(i).toString(16).padStart(2, '0');
+    }
 
-    const salt = combined.slice(0, SALT_LENGTH);
-    const iv = combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const ciphertext = combined.slice(SALT_LENGTH + IV_LENGTH);
+    const saltHex = hex.slice(0, SALT_LENGTH * 2);
+    const ivHex = hex.slice(SALT_LENGTH * 2, (SALT_LENGTH + IV_LENGTH) * 2);
+    const ctHex = hex.slice((SALT_LENGTH + IV_LENGTH) * 2);
 
+    const salt = fromHex(saltHex);
+    const iv = fromHex(ivHex);
     const key = await deriveKey(password, salt);
 
-    const decrypted = await crypto.subtle.decrypt(
-      { name: ALGORITHM, iv },
+    const decrypted = CryptoJS.AES.decrypt(
+      { ciphertext: fromHex(ctHex) },
       key,
-      ciphertext
+      { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
     );
 
-    return DECODER.decode(decrypted);
+    return decrypted.toString(CryptoJS.enc.Utf8);
   }
 
   function isAvailable() {
-    return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+    return typeof CryptoJS !== 'undefined' && typeof crypto !== 'undefined';
   }
 
   window.RoomCrypto = {
