@@ -26,6 +26,32 @@ let fontSize = 22;
 const isCoarse = window.matchMedia('(pointer: coarse)').matches;
 if (isCoarse) fontSize = 20;
 
+/* ---------- Detección de Electron (desktop) ---------- */
+
+const isElectron = !!window.electronAPI;
+if (isElectron) {
+  document.body.classList.add('is-electron');
+
+  const dots = document.querySelectorAll('#window-controls .dot');
+  if (dots.length >= 3) {
+    dots[0].addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.electronAPI.closeWindow) window.electronAPI.closeWindow();
+    });
+    dots[1].addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.electronAPI.minimizeWindow) window.electronAPI.minimizeWindow();
+    });
+    dots[2].addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.electronAPI.toggleFullscreen) window.electronAPI.toggleFullscreen();
+    });
+  }
+}
+
 /* ---------- Persistencia local (localStorage) ---------- */
 
 function loadNotes() {
