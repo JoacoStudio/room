@@ -38,8 +38,6 @@ Escribe directamente. No hay botón de guardar: las notas se guardan automática
 | `Alt + Retroceso` | Cerrar ventana (solo escritorio) |
 | `Escape` | Cerrar el panel de ayuda si está abierto |
 
-> En el navegador web, `Alt + flecha izquierda/derecha` puede estar asignado al historial del navegador. Usa la versión de escritorio para el mejor funcionamiento.
-
 ---
 
 ## 3. Panel de notas y atajos (`Alt + V`)

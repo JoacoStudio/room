@@ -1,20 +1,10 @@
 # Guía de Instalación — Room
 
-Room funciona en tres formas: directamente en el navegador, como aplicación de escritorio (Electron) y como código fuente.
+Room funciona como aplicación de escritorio (Electron) y como código fuente.
 
 ---
 
-## Opción A: Usar directamente en el navegador (Web)
-
-1. Abre la carpeta del proyecto.
-2. Haz doble clic en `src/index.html`.
-3. La app se abrirá en tu navegador predeterminado.
-
-> En el navegador, algunas funciones de escritorio (como el atajo global `Alt + Z`) no están disponibles.
-
----
-
-## Opción B: Instalar como aplicación de escritorio (Windows)
+## Opción A: Instalar como aplicación de escritorio (Windows)
 
 ### Requisitos
 - [Node.js](https://nodejs.org/) instalado (v18 o superior)
@@ -26,12 +16,11 @@ Room funciona en tres formas: directamente en el navegador, como aplicación de 
 cd Room
 
 # 2. Instalar dependencias de Electron
-cd electron
+cd desktop
 npm install
 
-# 3. Volver a la raíz y ejecutar
-cd ..
-npm run start:electron
+# 3. Ejecutar la app
+npm start
 ```
 
 Esto abrirá Room como una ventana de aplicación sin barra de direcciones.
@@ -39,15 +28,15 @@ Esto abrirá Room como una ventana de aplicación sin barra de direcciones.
 ### Crear instalador (`.exe`)
 
 ```bash
-cd electron
+cd desktop
 npm run dist
 ```
 
-El instalador se generará en `electron/dist/`.
+El instalador se generará en `desktop/dist/`.
 
 ---
 
-## Opción C: Código fuente (desarrolladores)
+## Opción B: Código fuente (desarrolladores)
 
 1. Clona el repositorio:
 
@@ -56,41 +45,28 @@ git clone https://github.com/TU_USUARIO/Room.git
 cd Room
 ```
 
-2. Abre `src/index.html` en cualquier navegador para probar la versión web.
+2. Para ejecutar la versión de escritorio:
 
-3. Para escritorio, sigue los pasos de la Opción B.
+```bash
+cd desktop
+npm install
+npm start
+```
 
 ---
 
-## Estructura del proyecto
+## Estructura de `desktop/`
 
 ```
-Room/
-├── src/                 # Núcleo web compartido (HTML, CSS, JS)
-│   ├── index.html       # Entrada principal
-│   ├── style.css        # Estilos
-│   ├── script.js        # Lógica de notas, atajos, panel
-│   ├── Ic.ico           # Ícono de la app
-│   └── Iconito.svg      # Logo de la animación de carga
-├── electron/            # Versión de escritorio (Electron)
-│   ├── main.js          # Proceso principal
-│   ├── preload.js       # Puente seguro entre renderer y main
-│   ├── package.json     # Configuración de Electron
-│   └── src/Ic.ico       # Ícono Electron
-├── expo-app/            # Versión móvil (Expo/React Native) — código base
-├── design/              # Diseños Figma exportados
-│   └── Screen1.png
-├── docs/                # Documentación y manuales
-│   ├── README.md
-│   ├── USER_GUIDE.md
-│   ├── INSTALL.md
-│   ├── SECURITY.md
-│   └── CHANGELOG.md
-├── package.json         # Scripts y dependencias raíz
-├── README.md            # Este archivo
-├── Room.bat             # Acceso rápido Windows
-├── Room.ps1             # Abre y posiciona ventana (PowerShell)
-└── .gitignore
+desktop/
+├── main.js          # Proceso principal de Electron
+├── preload.js       # Puente seguro entre renderer y main
+├── index.html       # Entrada principal de la app
+├── style.css        # Estilos de la interfaz
+├── script.js        # Lógica de notas, atajos, panel
+├── Ic.ico           # Ícono de la app
+├── Iconito.svg      # Logo de la animación de carga
+└── package.json     # Configuración y dependencias de Electron
 ```
 
 ---
@@ -99,7 +75,6 @@ Room/
 
 | Problema | Solución |
 |----------|----------|
-| La ventana no abre con `Alt + Z` | Asegúrate de ejecutar la versión de Electron, no el HTML directo en el navegador |
-| Las notas no se guardan | Verifica que el navegador permita `localStorage` (modo privado puede limitarlo) |
-| El atajo `Alt + flecha` no funciona en web | Es atajo nativo del navegador. Usa Electron o prueba `Alt + N` / `Alt + B` |
-| No se puede exportar | Algunos navegadores bloquean descargas automáticas. Revisa la barra de descargas |
+| La ventana no abre con `Alt + Z` | Asegúrate de ejecutar la versión de Electron (`cd desktop && npm start`) |
+| Las notas no se guardan | Verifica que el sistema permita escribir en `localStorage` |
+| El atajo `Alt + Z` no funciona desde otra app | Es posible que otra aplicación esté usando ese atajo. Prueba cerrando otras apps |

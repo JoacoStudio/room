@@ -13,7 +13,7 @@ function createWindow() {
     minHeight: 500,
     title: 'Room',
     frame: false,
-    icon: path.join(__dirname, 'src', 'Ic.ico'),
+    icon: path.join(__dirname, 'Ic.ico'),
     backgroundThrottling: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -22,13 +22,11 @@ function createWindow() {
     }
   });
 
-  // index.html es el núcleo web compartido en src/ (raíz del proyecto)
-  const indexPath = path.join(__dirname, '..', 'src', 'index.html');
+  // index.html está en la misma carpeta (desktop/)
+  const indexPath = path.join(__dirname, 'index.html');
   win.loadFile(indexPath);
 
   win.on('close', (e) => {
-    // En Windows, al cerrar la ventana no salimos de la app:
-    // solo la ocultamos para que el atajo Alt+| siga funcionando desde cualquier lugar.
     if (process.platform === 'win32' && !isQuitting) {
       e.preventDefault();
       win.hide();
@@ -56,7 +54,7 @@ function toggleWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'src', 'Ic.ico');
+  const iconPath = path.join(__dirname, 'Ic.ico');
   const icon = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(icon);
@@ -86,7 +84,6 @@ app.whenReady().then(() => {
   createWindow();
 
   // Atajo global único (funciona desde cualquier lugar de Windows)
-  // Alt+Espacio está reservado por Windows, Alt+| depende del teclado. Usamos Alt+Z.
   const registeredZ = globalShortcut.register('Alt+Z', toggleWindow);
   if (!registeredZ) {
     console.log('[Room] No se pudo registrar el atajo Alt+Z');
@@ -109,15 +106,13 @@ app.on('will-quit', () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // No salemos: mantenemos la app en segundo plano para que Alt+| siga funcionando.
+    // No salemos: mantenemos la app en segundo plano para que Alt+Z siga funcionando.
     // Usá el ícono de bandeja > Salir para cerrar completamente.
   }
 });
 
 // IPC: controles de ventana desde el renderer (puntos superiores en desktop)
 // VALIDACIÓN DE SEGURIDAD: solo acepta mensajes del webContents de Room
-const ALLOWED_WINDOW_ACTIONS = ['window-minimize', 'window-close', 'window-fullscreen'];
-
 function isValidIPCRequest(event) {
   if (!event || !event.sender) return false;
   const senderWindow = BrowserWindow.fromWebContents(event.sender);
