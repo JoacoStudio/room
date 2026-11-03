@@ -1,2 +1,7 @@
-// Preload script: expone APIs seguras al renderer si fuera necesario.
-// Por ahora la app funciona sin exposiciones adicionales.
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  minimizeWindow: () => ipcRenderer.send('window-minimize'),
+  closeWindow: () => ipcRenderer.send('window-close'),
+  toggleFullscreen: () => ipcRenderer.send('window-fullscreen')
+});

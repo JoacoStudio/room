@@ -8,155 +8,97 @@
 <link rel="icon" href="Ic.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="preload" as="font" href="https://fonts.gstatic.com/s/nunitosans/v16/pe0qMImSLYBIv13eXOc1qP9nyU-qyK3w.woff2" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+  /* CSS crítico: estilos esenciales para el primer pintado */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #ffffff; color: #000000; font-family: "Nunito Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 18px; line-height: 1.6; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  textarea#note { position: absolute; top: 64px; left: 48px; width: calc(100% - 96px); height: calc(100% - 160px); font-family: inherit; font-size: 22px; font-weight: 400; color: #000000; background: transparent; border: none; outline: none; resize: none; text-align: left; padding: 0; contain: layout style paint; transform: translateZ(0); }
+  textarea#note::placeholder { color: #999999; }
+  #clock { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); font-size: 16px; color: #666666; font-variant-numeric: tabular-nums; pointer-events: none; }
+  #modeIndicator { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 600; color: #000000; pointer-events: none; display: none; opacity: 0; }
+  #help-toggle { position: fixed; top: 50%; right: 12px; transform: translateY(-50%); width: 3px; height: 48px; background: #232323; border: none; border-radius: 1.5px; cursor: pointer; z-index: 50; padding: 0; display: block; }
+  .splash-overlay { position: fixed; inset: 0; background: #ffffff; z-index: 300; display: flex; justify-content: center; align-items: center; transition: opacity 0.6s ease; }
+  #window-controls { position: absolute; top: 12px; left: 12px; display: none; gap: 6px; z-index: 10; pointer-events: none; }
+  body.is-electron #window-controls { display: flex; pointer-events: auto; }
+  #window-controls .dot { width: 12px; height: 12px; border-radius: 50%; background: #232323; cursor: pointer; }
+  body.dark-mode { background: #000000; color: #ffffff; }
+  body.dark-mode textarea#note { color: #ffffff; }
+  body.dark-mode #clock { color: #888888; }
+  body.dark-mode #modeIndicator { color: #ffffff; }
+  body.dark-mode #help-toggle { background: #ffffff; }
+  body.dark-mode .splash-overlay { background: #000000; }
+</style>
+<link rel="stylesheet" href="style.css" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="style.css"></noscript>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self'; frame-ancestors 'none';">
 </head>
 <body>
-<div id="clock" aria-label="Reloj"></div>
+  <div id="drag-region" aria-hidden="true"></div>
 
-<div class="container">
-  <div id="topZone" class="top-zone" aria-hidden="true"></div>
-  <textarea id="note" placeholder="Escribe aquí..." spellcheck="false" aria-label="Contenido de la nota"></textarea>
-  <div class="status" id="statusBar">
-    <div class="hint" id="hint" aria-live="polite" aria-atomic="true"></div>
-    <span class="sync-status disconnected" id="syncStatus">Sin sincronizar</span>
-    <button class="handle-hit" id="handleHit" type="button" aria-label="Abrir acciones">
-      <span class="handle" aria-hidden="true"></span>
-    </button>
+  <div id="window-controls" aria-hidden="true">
+    <span class="dot"></span>
+    <span class="dot"></span>
+    <span class="dot"></span>
   </div>
-</div>
 
-<input type="file" id="fileInput" accept=".txt,.json,.md" hidden>
+  <div class="top-divider"></div>
 
-<div id="helpOverlay" class="help-overlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-hidden="true">
-  <div class="help-card" tabindex="-1">
-    <h1 class="help-title" id="helpTitle">Atajos</h1>
-    <table class="help-table help-desktop">
-      <tr><td>Alt + N</td><td>Nueva nota</td></tr>
-      <tr><td>Alt + B</td><td>Eliminar nota actual</td></tr>
-      <tr><td>Alt + ←</td><td>Nota anterior</td></tr>
-      <tr><td>Alt + →</td><td>Siguiente nota</td></tr>
-      <tr><td>Alt + Q</td><td>Pantalla completa</td></tr>
-      <tr><td>Alt + D</td><td>Exportar nota (.txt)</td></tr>
-      <tr><td>Alt + E</td><td>Exportar todas las notas (.json)</td></tr>
-      <tr><td>Alt + I</td><td>Importar notas desde archivo</td></tr>
-      <tr><td>Alt + R</td><td>Modo lectura / escritura</td></tr>
-      <tr><td>Alt + 2</td><td>Hub de estadísticas</td></tr>
-      <tr><td>Alt + X</td><td>Esta ayuda</td></tr>
-    </table>
-    <table class="help-table help-mobile">
-      <tr><td>←</td><td>Siguiente nota</td></tr>
-      <tr><td>→</td><td>Nota anterior</td></tr>
-      <tr><td>↓</td><td>Nueva nota</td></tr>
-      <tr><td>↑</td><td>Acciones</td></tr>
-      <tr><td>Tocar</td><td>Escribir / mover cursor</td></tr>
-      <tr><td>Mantener</td><td>Seleccionar texto</td></tr>
-    </table>
-    <p class="help-close help-desktop">Presiona cualquier tecla para cerrar</p>
-    <p class="help-close help-mobile">Toca para cerrar</p>
-  </div>
-</div>
+  <textarea id="note" placeholder="Escribe acá.." spellcheck="false" aria-label="Contenido de la nota"></textarea>
 
-<div id="actionSheet" class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true">
-  <div class="sheet-backdrop" data-close="true"></div>
-  <div class="sheet-panel" id="sheetPanel" tabindex="-1">
-    <div class="sheet-handle" aria-hidden="true"></div>
-    <h2 class="sheet-title" id="sheetTitle">Acciones</h2>
-    <div class="sheet-actions">
-      <button type="button" class="sheet-action" data-action="new">Nueva nota</button>
-      <button type="button" class="sheet-action" data-action="delete">Eliminar nota</button>
-      <button type="button" class="sheet-action" data-action="export-one">Exportar nota</button>
-      <button type="button" class="sheet-action" data-action="export-all">Exportar todas</button>
-      <button type="button" class="sheet-action" data-action="import">Importar</button>
-      <button type="button" class="sheet-action" data-action="readonly">Solo lectura</button>
-      <button type="button" class="sheet-action" data-action="help">Ayuda</button>
-    </div>
-  </div>
-</div>
+  <div id="clock" aria-label="Reloj">00:00:00</div>
+  <div id="modeIndicator" aria-label="Modo" role="status" aria-live="polite"></div>
 
-<div id="undoToast" class="undo-toast">
-  <span aria-live="polite">Nota eliminada</span>
-  <button type="button" class="undo-btn" id="undoBtn">Deshacer</button>
-</div>
+  <button id="help-toggle" aria-label="Ayuda" aria-expanded="false"></button>
 
-<div id="splashOverlay" class="splash-overlay">
-  <div class="loader"></div>
-</div>
-
-<div id="hubOverlay" class="hub-overlay" role="dialog" aria-modal="true" aria-labelledby="hubTitle" aria-hidden="true">
-  <div class="hub-card" tabindex="-1">
-    <div class="hub-header">
-      <h1 class="hub-title" id="hubTitle">Hub</h1>
-      <div class="hub-tabs">
-        <button class="hub-tab active" data-tab="summary">Resumen</button>
-        <button class="hub-tab" data-tab="charts">Gráficos</button>
+  <div id="help-panel" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="help-panel-backdrop" data-close="true"></div>
+    <div class="help-panel-split">
+      <div class="help-notes-column">
+        <h3 id="help-notes-title">Notas</h3>
+        <ul id="help-notes-list" role="list"></ul>
+        <p id="help-notes-empty" class="help-empty">Sin notas</p>
+      </div>
+      <div class="help-shortcuts-column">
+        <h3 id="help-shortcuts-title">Atajos</h3>
+        <table>
+          <tr><td>Alt + N</td><td>Nueva nota</td></tr>
+          <tr><td>Alt + B</td><td>Eliminar nota</td></tr>
+          <tr><td>Alt + ←</td><td>Nota anterior</td></tr>
+          <tr><td>Alt + →</td><td>Siguiente nota</td></tr>
+          <tr><td>Alt + Q</td><td>Pantalla completa</td></tr>
+          <tr><td>Alt + D</td><td>Exportar nota</td></tr>
+          <tr><td>Alt + E</td><td>Exportar todas</td></tr>
+          <tr><td>Alt + I</td><td>Importar notas</td></tr>
+          <tr><td>Alt + R</td><td>Solo lectura</td></tr>
+          <tr><td>Alt + O</td><td>Cambiar tema</td></tr>
+          <tr><td>Alt + +</td><td>Letra más grande</td></tr>
+          <tr><td>Alt + -</td><td>Letra más chica</td></tr>
+          <tr><td>Alt + V</td><td>Ver notas</td></tr>
+          <tr><td>Alt + Z</td><td>Abrir Room</td></tr>
+          <tr><td>Alt + Retroceso</td><td>Cerrar</td></tr>
+        </table>
+        <p class="help-close">Presiona Escape para cerrar</p>
       </div>
     </div>
-    <div class="hub-content">
-      <section class="hub-section active" id="hubSummary">
-        <div class="hub-stats" id="hubStats"></div>
-        <div class="hub-notes" id="hubNotes"></div>
-      </section>
-      <section class="hub-section" id="hubCharts">
-        <div class="chart-card">
-          <h3 class="chart-title">Palabras por día</h3>
-          <canvas id="chartDaily" width="520" height="260"></canvas>
-        </div>
-        <div class="chart-card">
-          <h3 class="chart-title">Días activos</h3>
-          <canvas id="chartStreak" width="520" height="200"></canvas>
-        </div>
-      </section>
-    </div>
-    <p class="hub-close help-desktop">Presiona Alt + 2 para cerrar</p>
-    <p class="hub-close help-mobile">Toca para cerrar</p>
   </div>
-</div>
 
-<!-- Modal de login / registro -->
-<div id="loginModal" class="login-overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-hidden="true">
-  <div class="login-card" tabindex="-1">
-    <h1 class="login-title" id="loginTitle">Sincronizar notas</h1>
-    <p class="login-subtitle">Tus notas se cifran con tu contraseña. Solo vos podés leerlas.</p>
+  <input type="file" id="fileInput" accept=".txt,.json,.md" hidden>
 
-    <div class="login-tabs">
-      <button class="login-tab active" data-mode="login">Iniciar sesión</button>
-      <button class="login-tab" data-mode="signup">Crear cuenta</button>
+  <div id="splashOverlay" class="splash-overlay">
+    <div class="splash-logo">
+      <svg class="splash-svg" width="200" height="200" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect class="part bg" width="500" height="500" rx="78.125" fill="white" style="--i: 0;" />
+        <g class="part" style="--i: 1;"><rect x="152.344" y="127.93" width="195.312" height="48.8281" rx="24.4141" fill="#232323"/></g>
+        <g class="part" style="--i: 2;"><rect x="152.344" y="225.586" width="195.312" height="48.8281" rx="24.4141" fill="#232323"/></g>
+        <g class="part" style="--i: 3;"><rect x="152.344" y="323.242" width="195.312" height="48.8281" rx="24.4141" fill="#232323"/></g>
+        <g class="part" style="--i: 4;"><rect x="152.344" y="127.93" width="48.8281" height="244.141" rx="24.4141" fill="#232323"/></g>
+        <g class="part" style="--i: 5;"><rect x="298.828" y="127.93" width="48.8281" height="244.141" rx="24.4141" fill="#232323"/></g>
+      </svg>
     </div>
-
-    <form id="loginForm" class="login-form">
-      <div class="login-field">
-        <label for="loginEmail">Correo electrónico</label>
-        <input type="email" id="loginEmail" required placeholder="tucorreo@ejemplo.com" autocomplete="email">
-      </div>
-      <div class="login-field">
-        <label for="loginPassword">Contraseña</label>
-        <input type="password" id="loginPassword" required placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <p class="login-warning">⚠ Si olvidás tu contraseña, no se podrán recuperar las notas.</p>
-      <button type="submit" class="login-btn" id="loginBtn">Iniciar sesión</button>
-      <button type="button" class="login-btn-secondary" id="skipLoginBtn">Usar sin sincronizar</button>
-    </form>
-    <div id="loginError" class="login-error" aria-live="polite"></div>
   </div>
-</div>
 
-<!-- Supabase client (CDN) — necesario para la sincronización -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<!-- CryptoJS (CDN) — necesario para el cifrado de notas -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-
-<!-- Configuración de Supabase (reemplaza los valores con los de tu proyecto) -->
-<script>
-  window.SUPABASE_URL = 'https://tu-proyecto.supabase.co';
-  window.SUPABASE_ANON_KEY = 'tu-anon-key-aqui';
-</script>
-
-<!-- Capa de cifrado y cliente Supabase (deben cargar antes de script.js) -->
-<script src="crypto.js"></script>
-<script src="supabase.js"></script>
-
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

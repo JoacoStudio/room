@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 
 let win = null;
@@ -14,6 +14,7 @@ function createWindow() {
     title: 'Room',
     frame: false,
     icon: path.join(__dirname, 'src', 'Ic.ico'),
+    backgroundThrottling: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -42,11 +43,14 @@ function createWindow() {
 }
 
 function toggleWindow() {
+  console.log('[Room] toggleWindow ejecutado');
   if (win) {
+    console.log('[Room] ventana existe, visible:', win.isVisible(), 'minimizada:', win.isMinimized());
     if (win.isMinimized()) win.restore();
-    win.show();
+    if (!win.isVisible()) win.show();
     win.focus();
   } else {
+    console.log('[Room] ventana no existe, creando...');
     createWindow();
   }
 }
@@ -62,7 +66,7 @@ function createTray() {
     {
       label: 'Mostrar Room',
       click: toggleWindow,
-      accelerator: 'Alt+|'
+      accelerator: 'Alt+Z'
     },
     { type: 'separator' },
     {
@@ -81,12 +85,13 @@ function createTray() {
 app.whenReady().then(() => {
   createWindow();
 
-  // Atajo global: Alt + |  (funciona desde cualquier lugar de Windows)
-  const registered = globalShortcut.register('Alt+|', toggleWindow);
-  if (!registered) {
-    console.log('[Room] No se pudo registrar el atajo Alt+|');
+  // Atajo global único (funciona desde cualquier lugar de Windows)
+  // Alt+Espacio está reservado por Windows, Alt+| depende del teclado. Usamos Alt+Z.
+  const registeredZ = globalShortcut.register('Alt+Z', toggleWindow);
+  if (!registeredZ) {
+    console.log('[Room] No se pudo registrar el atajo Alt+Z');
   } else {
-    console.log('[Room] Atajo global registrado: Alt+|');
+    console.log('[Room] Atajo global registrado: Alt+Z');
   }
 
   createTray();
@@ -104,7 +109,49 @@ app.on('will-quit', () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // No salimos: mantenemos la app en segundo plano para que Alt+| siga funcionando.
+    // No salemos: mantenemos la app en segundo plano para que Alt+| siga funcionando.
     // Usá el ícono de bandeja > Salir para cerrar completamente.
+  }
+});
+
+// IPC: controles de ventana desde el renderer (puntos superiores en desktop)
+// VALIDACIÓN DE SEGURIDAD: solo acepta mensajes del webContents de Room
+const ALLOWED_WINDOW_ACTIONS = ['window-minimize', 'window-close', 'window-fullscreen'];
+
+function isValidIPCRequest(event) {
+  if (!event || !event.sender) return false;
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  return senderWindow === win;
+}
+
+ipcMain.on('window-minimize', (event) => {
+  if (!isValidIPCRequest(event)) {
+    console.warn('[Room] IPC window-minimize rechazado: origen no válido');
+    return;
+  }
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  if (senderWindow) senderWindow.minimize();
+});
+
+ipcMain.on('window-close', (event) => {
+  if (!isValidIPCRequest(event)) {
+    console.warn('[Room] IPC window-close rechazado: origen no válido');
+    return;
+  }
+  app.quit();
+});
+
+ipcMain.on('window-fullscreen', (event) => {
+  if (!isValidIPCRequest(event)) {
+    console.warn('[Room] IPC window-fullscreen rechazado: origen no válido');
+    return;
+  }
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  if (senderWindow) {
+    if (senderWindow.isFullScreen()) {
+      senderWindow.setFullScreen(false);
+    } else {
+      senderWindow.setFullScreen(true);
+    }
   }
 });

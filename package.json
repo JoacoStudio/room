@@ -1,7 +1,7 @@
 {
   "name": "room",
   "version": "1.0.0",
-  "description": "Organizador de notas minimalista (blanco y negro, sin botones en la nota)",
+  "description": "Organizador de notas minimalista (blanco y negro, sin botones en la nota). Almacenamiento 100% local en localStorage. Escritorio (Electron) y Web.",
   "scripts": {
     "start": "npm run start:electron",
     "start:web": "start src\\index.html",
@@ -13,11 +13,11 @@
     "notas",
     "minimalista",
     "electron",
-    "expo"
+    "web",
+    "local",
+    "offline"
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
-  }
+  "dependencies": {}
 }

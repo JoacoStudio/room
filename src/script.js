@@ -1,333 +1,32 @@
 const note = document.getElementById('note');
-const hint = document.getElementById('hint');
-const helpOverlay = document.getElementById('helpOverlay');
 const clock = document.getElementById('clock');
-const splashOverlay = document.getElementById('splashOverlay');
+const modeIndicator = document.getElementById('modeIndicator');
 const fileInput = document.getElementById('fileInput');
-const statusBar = document.getElementById('statusBar');
-const handleHit = document.getElementById('handleHit');
-const topZone = document.getElementById('topZone');
-const actionSheet = document.getElementById('actionSheet');
-const sheetPanel = document.getElementById('sheetPanel');
-const undoToast = document.getElementById('undoToast');
-const undoBtn = document.getElementById('undoBtn');
-const helpCard = document.querySelector('.help-card');
-const hubOverlay = document.getElementById('hubOverlay');
+const splashOverlay = document.getElementById('splashOverlay');
+const helpToggle = document.getElementById('help-toggle');
+const helpPanel = document.getElementById('help-panel');
+const helpNotesList = document.getElementById('help-notes-list');
+const helpNotesEmpty = document.getElementById('help-notes-empty');
 
 const STORAGE_KEY = 'minimalist_notes';
 const ACTIVE_KEY = 'room_active_index';
 const THEME_KEY = 'room_theme';
-const THEMES = ['auto', 'dark', 'light'];
-const STATS_KEY = 'room_stats';
-const SYNC_ENABLED_KEY = 'room_sync_enabled';
-const CURRENT_USER_KEY = 'room_current_user';
-
-/* ---------- Estado de sincronización ---------- */
-
-let currentUser = null;
-let userPassword = null; // solo en memoria, nunca se guarda en localStorage
-let syncStatus = 'disconnected'; // 'disconnected' | 'syncing' | 'synced' | 'error'
-let syncErrorMessage = '';
-
-const KEYS = {
-  NEW: 'n',
-  DELETE: 'b',
-  PREV: 'ArrowLeft',
-  NEXT: 'ArrowRight',
-  FULLSCREEN: 'q',
-  EXPORT_ONE: 'd',
-  EXPORT_ALL: 'e',
-  IMPORT: 'i',
-  READONLY: 'r',
-  THEME: 'o',
-  HELP: 'x',
-  CLOSE: 'Backspace'
-};
-
-const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+const THEMES = ['dark', 'light'];
 
 let notes = [];
 let activeIndex = 0;
-let hintTimer = null;
-let hintResetTimer = null;
 let typingTimer = null;
 let saveTimer = null;
+let modeTimer = null;
 let isReadOnly = false;
 let clockInterval = null;
-let sheetOpen = false;
-let deletedNote = null;
-let deletedIndex = -1;
-let deletedPlaceholderId = null;
-let undoTimer = null;
-let isProgrammaticChange = false;
-let currentTheme = 'auto';
-let hubOpen = false;
-let stats = {
-  wordsTotal: 0,
-  charsTotal: 0,
-  notesCreated: 0,
-  notesDeleted: 0,
-  daysActive: [],
-  lastActivity: null,
-  lastNotes: []
-};
+let currentTheme = 'light';
+let fontSize = 22;
 
-function vibrate(ms = 10) {
-  if (isCoarse && navigator.vibrate) navigator.vibrate(ms);
-}
+const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+if (isCoarse) fontSize = 20;
 
-/* ---------- Sincronización con Supabase ---------- */
-
-function updateSyncStatus(status, errorMsg) {
-  syncStatus = status;
-  syncErrorMessage = errorMsg || '';
-  const el = document.getElementById('syncStatus');
-  if (el) {
-    el.textContent = syncStatusLabel();
-    el.className = 'sync-status ' + status;
-  }
-}
-
-function syncStatusLabel() {
-  const labels = {
-    disconnected: 'Sin sincronizar',
-    syncing: 'Sincronizando...',
-    synced: 'Sincronizado',
-    error: 'Error de sincronización'
-  };
-  return labels[syncStatus] || 'Desconocido';
-}
-
-async function login(email, password) {
-  if (!window.RoomSupabase || !window.RoomSupabase.isConfigured()) {
-    showStatus('Supabase no configurado');
-    return false;
-  }
-
-  const supabase = window.RoomSupabase.getSupabase();
-  if (!supabase) return false;
-
-  updateSyncStatus('syncing');
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-
-    currentUser = data.user;
-    userPassword = password;
-    localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
-    localStorage.setItem(SYNC_ENABLED_KEY, 'true');
-
-    updateSyncStatus('syncing');
-    await syncDownload();
-    updateSyncStatus('synced');
-
-    hideLoginModal();
-    showStatus('Sesión iniciada · notas sincronizadas');
-    return true;
-  } catch (err) {
-    console.error('[Room] Error al iniciar sesión:', err);
-    updateSyncStatus('error', err.message);
-    showStatus('Error al iniciar sesión: ' + (err.message || 'desconocido'));
-    return false;
-  }
-}
-
-async function signup(email, password) {
-  if (!window.RoomSupabase || !window.RoomSupabase.isConfigured()) {
-    showStatus('Supabase no configurado');
-    return false;
-  }
-
-  const supabase = window.RoomSupabase.getSupabase();
-  if (!supabase) return false;
-
-  updateSyncStatus('syncing');
-
-  try {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-
-    currentUser = data.user;
-    userPassword = password;
-    localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
-    localStorage.setItem(SYNC_ENABLED_KEY, 'true');
-
-    updateSyncStatus('syncing');
-    await syncDownload();
-    updateSyncStatus('synced');
-
-    hideLoginModal();
-    showStatus('Cuenta creada · notas sincronizadas');
-    return true;
-  } catch (err) {
-    console.error('[Room] Error al crear cuenta:', err);
-    updateSyncStatus('error', err.message);
-    showStatus('Error al crear cuenta: ' + (err.message || 'desconocido'));
-    return false;
-  }
-}
-
-async function logout() {
-  if (window.RoomSupabase && window.RoomSupabase.getSupabase()) {
-    await window.RoomSupabase.getSupabase().auth.signOut();
-  }
-
-  currentUser = null;
-  userPassword = null;
-  localStorage.removeItem(CURRENT_USER_KEY);
-  localStorage.removeItem(SYNC_ENABLED_KEY);
-  notes = [{ id: Date.now().toString(), title: '', body: '', updated: Date.now() }];
-  activeIndex = 0;
-  saveNotes();
-  updateSyncStatus('disconnected');
-
-  showLoginModal();
-  showStatus('Sesión cerrada · notas locales borradas');
-}
-
-function isLoggedIn() {
-  return !!currentUser;
-}
-
-async function encryptNoteForSync(note) {
-  if (!userPassword || !window.RoomCrypto) return note;
-
-  const encrypted = {
-    id: note.id,
-    encrypted_body: await window.RoomCrypto.encrypt(note.body || '', userPassword),
-    encrypted_title: await window.RoomCrypto.encrypt(note.title || '', userPassword),
-    updated: note.updated,
-    device_id: 'web'
-  };
-  return encrypted;
-}
-
-async function decryptNoteFromSync(encryptedNote) {
-  if (!userPassword || !window.RoomCrypto) return encryptedNote;
-
-  return {
-    id: encryptedNote.id,
-    title: await window.RoomCrypto.decrypt(encryptedNote.encrypted_title, userPassword),
-    body: await window.RoomCrypto.decrypt(encryptedNote.encrypted_body, userPassword),
-    updated: encryptedNote.updated
-  };
-}
-
-async function syncDownload() {
-  if (!isLoggedIn() || !userPassword) return;
-
-  const supabase = window.RoomSupabase.getSupabase();
-  if (!supabase) return;
-
-  try {
-    const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .order('updated_at', { ascending: false });
-
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      // No hay notas remotas, subir las locales
-      await syncUpload();
-      return;
-    }
-
-    // Descifrar notas remotas
-    const remoteNotes = [];
-    for (const encNote of data) {
-      try {
-        const note = await decryptNoteFromSync(encNote);
-        remoteNotes.push(note);
-      } catch (e) {
-        console.warn('[Room] No se pudo descifrar nota remota:', encNote.id, e);
-      }
-    }
-
-    // Fusión: last-write-wins por updated
-    const merged = mergeNotes(notes, remoteNotes);
-    notes = merged;
-    saveNotes();
-
-    if (notes.length > 0) {
-      loadNote(activeIndex, !isCoarse);
-    }
-
-    // Subir cualquier cambio local que no esté remoto
-    await syncUpload();
-  } catch (err) {
-    console.error('[Room] Error descargando notas:', err);
-    throw err;
-  }
-}
-
-async function syncUpload() {
-  if (!isLoggedIn() || !userPassword) return;
-
-  const supabase = window.RoomSupabase.getSupabase();
-  if (!supabase) return;
-
-  try {
-    for (const note of notes) {
-      const encrypted = await encryptNoteForSync(note);
-
-      const { error } = await supabase
-        .from('notes')
-        .upsert({
-          id: encrypted.id,
-          user_id: currentUser.id,
-          encrypted_body: encrypted.encrypted_body,
-          encrypted_title: encrypted.encrypted_title,
-          updated_at: new Date(encrypted.updated).toISOString(),
-          device_id: encrypted.device_id
-        }, { onConflict: 'id' });
-
-      if (error) throw error;
-    }
-  } catch (err) {
-    console.error('[Room] Error subiendo notas:', err);
-    throw err;
-  }
-}
-
-/**
- * Fusión de dos listas de notas por last-write-wins usando 'updated'.
- */
-function mergeNotes(localNotes, remoteNotes) {
-  const map = new Map();
-
-  for (const n of localNotes) {
-    map.set(n.id, n);
-  }
-
-  for (const n of remoteNotes) {
-    const existing = map.get(n.id);
-    if (!existing || (n.updated || 0) > (existing.updated || 0)) {
-      map.set(n.id, n);
-    }
-  }
-
-  return Array.from(map.values()).sort((a, b) => (b.updated || 0) - (a.updated || 0));
-}
-
-/* ---------- UI de login ---------- */
-
-function showLoginModal() {
-  const modal = document.getElementById('loginModal');
-  if (modal) {
-    modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
-  }
-}
-
-function hideLoginModal() {
-  const modal = document.getElementById('loginModal');
-  if (modal) {
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
-  }
-}
+/* ---------- Persistencia local (localStorage) ---------- */
 
 function loadNotes() {
   try {
@@ -345,9 +44,7 @@ function loadNotes() {
 function saveNotes() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-  } catch (e) {
-    showStatus('No se pudo guardar en almacenamiento local');
-  }
+  } catch (e) {}
 }
 
 function getSavedIndex() {
@@ -360,12 +57,14 @@ function getSavedIndex() {
   }
 }
 
+/* ---------- Reloj ---------- */
+
 function updateClock() {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  clock.textContent = `${hours}:${minutes}:${seconds}`;
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  clock.textContent = `${h}:${m}:${s}`;
 }
 
 function startClock() {
@@ -379,10 +78,7 @@ function stopClock() {
   clockInterval = null;
 }
 
-function isNight() {
-  const hour = new Date().getHours();
-  return hour >= 20 || hour < 8;
-}
+/* ---------- Tema ---------- */
 
 function applyTheme(theme) {
   currentTheme = theme;
@@ -394,346 +90,173 @@ function applyTheme(theme) {
 
   if (theme === 'dark') {
     document.body.classList.add('dark-mode');
-  } else if (theme === 'auto' && isNight()) {
-    document.body.classList.add('dark-mode');
   }
-
-  showShortcutHint();
 }
 
 function toggleTheme() {
   const idx = THEMES.indexOf(currentTheme);
   const next = THEMES[(idx + 1) % THEMES.length];
   applyTheme(next);
-
-  const labels = { auto: 'sistema', dark: 'oscuro', light: 'claro' };
-  showTransient(`Tema: ${labels[next]}`, 3000);
+  const labels = { dark: 'oscuro', light: 'claro' };
+  showModeIndicator(`Modo: ${labels[next]}`);
 }
 
-/* ---------- Hub / Estadísticas ---------- */
+function showModeIndicator(text) {
+  clearTimeout(modeTimer);
+  clock.style.opacity = '0';
+  setTimeout(() => {
+    clock.style.display = 'none';
+  }, 300);
 
-function loadStats() {
-  try {
-    const raw = localStorage.getItem(STATS_KEY);
-    if (raw) {
-      stats = JSON.parse(raw);
-      if (!stats.dailyWords) stats.dailyWords = {};
-    } else {
-      stats = {
-        wordsTotal: 0,
-        charsTotal: 0,
-        notesCreated: 0,
-        notesDeleted: 0,
-        daysActive: [],
-        lastActivity: null,
-        dailyWords: {}
-      };
-    }
-  } catch (e) {
-    stats = {
-      wordsTotal: 0,
-      charsTotal: 0,
-      notesCreated: 0,
-      notesDeleted: 0,
-      daysActive: [],
-      lastActivity: null,
-      dailyWords: {}
-    };
-  }
+  modeIndicator.textContent = text;
+  modeIndicator.style.display = 'block';
+  modeIndicator.offsetHeight; // forzar reflow
+  modeIndicator.style.opacity = '1';
+
+  modeTimer = setTimeout(() => {
+    modeIndicator.style.opacity = '0';
+    setTimeout(() => {
+      modeIndicator.style.display = 'none';
+      clock.style.display = 'block';
+      clock.style.opacity = '1';
+    }, 300);
+  }, 2000);
 }
 
-function saveStats() {
+function showShortcutIndicator(text) {
+  clearTimeout(modeTimer);
+  clock.style.opacity = '0';
+  setTimeout(() => { clock.style.display = 'none'; }, 300);
+
+  modeIndicator.textContent = text;
+  modeIndicator.style.display = 'block';
+  modeIndicator.offsetHeight; // forzar reflow
+  modeIndicator.style.opacity = '1';
+
+  modeTimer = setTimeout(() => {
+    modeIndicator.style.opacity = '0';
+    setTimeout(() => {
+      modeIndicator.style.display = 'none';
+      clock.style.display = 'block';
+      clock.style.opacity = '1';
+    }, 300);
+  }, 2000);
+}
+
+/* ---------- Tamaño de letra ---------- */
+
+function applyFontSize() {
+  note.style.fontSize = fontSize + 'px';
   try {
-    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    localStorage.setItem('room_font_size', String(fontSize));
   } catch (e) {}
 }
 
-function recordTyping() {
-  const text = note.value || '';
-  const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-  const chars = text.length;
-
-  const today = new Date().toDateString();
-  if (!stats.dailyWords) stats.dailyWords = {};
-  stats.dailyWords[today] = words;
-
-  if (!stats.daysActive.includes(today)) {
-    stats.daysActive.push(today);
-    stats.daysActive.sort();
+function increaseFontSize() {
+  if (fontSize < 32) {
+    fontSize += 2;
+    applyFontSize();
+    showShortcutIndicator('Tamaño ' + fontSize + 'px');
   }
-
-  stats.lastActivity = Date.now();
-  stats.wordsTotal = Object.values(stats.dailyWords || {}).reduce((a, b) => a + b, 0);
-  stats.charsTotal = Math.max(stats.charsTotal, chars);
-
-  saveStats();
 }
 
-function recordNoteCreated() {
-  stats.notesCreated++;
-  saveStats();
+function decreaseFontSize() {
+  if (fontSize > 16) {
+    fontSize -= 2;
+    applyFontSize();
+    showShortcutIndicator('Tamaño ' + fontSize + 'px');
+  }
 }
 
-function recordNoteDeleted() {
-  stats.notesDeleted++;
-  saveStats();
+/* ---------- Panel de ayuda (clic en ralla) ---------- */
+
+function openHelpPanel() {
+  helpPanel.classList.add('open');
+  helpToggle.setAttribute('aria-expanded', 'true');
+  renderHelpNotes();
 }
 
-function getLastNotes() {
-  return notes
-    .slice()
-    .sort((a, b) => (b.updated || 0) - (a.updated || 0))
-    .slice(0, 5)
-    .map((n) => n.body || '')
-    .filter((t) => t.trim() !== '')
-    .map((t) => (t.length > 40 ? t.slice(0, 40) + '…' : t));
+function closeHelpPanel() {
+  helpPanel.classList.remove('open');
+  helpToggle.setAttribute('aria-expanded', 'false');
 }
 
-function calculateWPM() {
-  if (!stats.lastActivity) return 0;
-  const now = Date.now();
-  const minutes = Math.max(1, (now - stats.lastActivity) / 60000);
-  return Math.round(stats.wordsTotal / minutes);
-}
-
-function renderHubStats() {
-  const statsContainer = document.getElementById('hubStats');
-  const notesContainer = document.getElementById('hubNotes');
-  if (!statsContainer || !notesContainer) return;
-
-  const totalWords = stats.wordsTotal;
-  const totalChars = stats.charsTotal;
-  const daysActive = stats.daysActive.length;
-  const wpm = calculateWPM();
-  const lastNotes = getLastNotes();
-
-  let html = `
-    <div class="stat-row"><span class="stat-label">Notas totales</span><span class="stat-value">${notes.length}</span></div>
-    <div class="stat-row"><span class="stat-label">Palabras escritas</span><span class="stat-value">${totalWords}</span></div>
-    <div class="stat-row"><span class="stat-label">Caracteres escritos</span><span class="stat-value">${totalChars}</span></div>
-    <div class="stat-row"><span class="stat-label">Ritmo aproximado</span><span class="stat-value">${wpm} palabras/min</span></div>
-    <div class="stat-row"><span class="stat-label">Días activos</span><span class="stat-value">${daysActive}</span></div>
-    <div class="stat-row"><span class="stat-label">Notas creadas</span><span class="stat-value">${stats.notesCreated}</span></div>
-    <div class="stat-row"><span class="stat-label">Notas eliminadas</span><span class="stat-value">${stats.notesDeleted}</span></div>
-  `;
-
-  statsContainer.innerHTML = html;
-
-  let notesHtml = '<h3>Últimas notas</h3><ul>';
-  if (lastNotes.length > 0) {
-    lastNotes.forEach((t) => {
-      notesHtml += `<li style="margin: 2px 0; font-size: 14px;">"${t}"</li>`;
-    });
+function toggleHelpPanel() {
+  if (helpPanel.classList.contains('open')) {
+    closeHelpPanel();
   } else {
-    notesHtml += '<li style="color:#666666;font-size:14px;">Sin notas aún</li>';
-  }
-  notesHtml += '</ul>';
-  notesContainer.innerHTML = notesHtml;
-}
-
-function toggleHub(force) {
-  const show = typeof force === 'boolean' ? force : hubOverlay.style.display !== 'flex';
-  hubOverlay.style.display = show ? 'flex' : 'none';
-  hubOverlay.classList.toggle('open', show);
-  document.body.classList.toggle('hub-active', show);
-  hubOpen = show;
-  if (show) {
-    note.blur();
-    renderHubStats();
-    renderHubCharts();
-    setupHubTabs();
-  } else {
-    note.focus();
+    openHelpPanel();
   }
 }
 
-/* ---------- Hub: pestañas ---------- */
-
-function setupHubTabs() {
-  const tabs = document.querySelectorAll('.hub-tab');
-  const sections = document.querySelectorAll('.hub-section');
-
-  tabs.forEach((tab) => {
-    tab.onclick = () => {
-      tabs.forEach((t) => t.classList.remove('active'));
-      sections.forEach((s) => s.classList.remove('active'));
-      tab.classList.add('active');
-      const id = 'hub' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1);
-      document.getElementById(id).classList.add('active');
-      if (tab.dataset.tab === 'charts') {
-        renderHubCharts();
-      }
-    };
-  });
-}
-
-/* ---------- Hub: gráficos con Canvas ---------- */
-
-function renderHubCharts() {
-  const dailyCanvas = document.getElementById('chartDaily');
-  const streakCanvas = document.getElementById('chartStreak');
-  if (!dailyCanvas || !streakCanvas) return;
-
-  const dailyCtx = dailyCanvas.getContext('2d');
-  const streakCtx = streakCanvas.getContext('2d');
-
-  dailyCtx.clearRect(0, 0, dailyCanvas.width, dailyCanvas.height);
-  streakCtx.clearRect(0, 0, streakCanvas.width, streakCanvas.height);
-
-  const dailyWords = stats.dailyWords || {};
-  const dates = Object.keys(dailyWords).sort();
-  const values = dates.map((d) => dailyWords[d] || 0);
-
-  // Gráfico de barras: palabras por día
-  dailyCtx.fillStyle = '#000000';
-  dailyCtx.font = '12px Nunito Sans, sans-serif';
-  dailyCtx.textAlign = 'center';
-
-  if (dates.length > 0) {
-    const maxVal = Math.max(...values, 1);
-    const barWidth = 28;
-    const gap = 12;
-    const chartHeight = dailyCanvas.height - 50;
-
-    dates.forEach((date, i) => {
-      const x = 20 + i * (barWidth + gap) + barWidth / 2;
-      const barHeight = (values[i] / maxVal) * chartHeight;
-      const y = dailyCanvas.height - 30 - barHeight;
-
-      dailyCtx.fillRect(x - barWidth / 2, y, barWidth, barHeight);
-      dailyCtx.fillText(values[i], x, y - 6);
-
-      const label = date.slice(5); // MM-DD
-      dailyCtx.fillText(label, x, dailyCanvas.height - 14);
-    });
-
-    dailyCtx.fillText('Palabras escritas por día', dailyCanvas.width / 2, 16);
-  } else {
-    dailyCtx.fillText('Sin actividad aún', dailyCanvas.width / 2, dailyCanvas.height / 2);
-  }
-
-  // Gráfico: días activos (cuadrícula simple de los últimos 14 días)
-  streakCtx.fillStyle = '#000000';
-  streakCtx.font = '12px Nunito Sans, sans-serif';
-  streakCtx.textAlign = 'center';
-  streakCtx.fillText(`Días activos: ${stats.daysActive.length}`, streakCanvas.width / 2, 24);
-
-  const cellSize = 26;
-  const cellGap = 8;
-  const startX = 20;
-  const startY = streakCanvas.height - 80;
-
-  const recentDays = stats.daysActive.slice(-14);
-  recentDays.forEach((date, i) => {
-    const x = startX + i * (cellSize + cellGap);
-    const y = startY;
-    streakCtx.fillStyle = '#000000';
-    streakCtx.fillRect(x, y, cellSize, cellSize);
-    streakCtx.fillStyle = '#ffffff';
-    streakCtx.fillText(date.slice(5), x + cellSize / 2, y + cellSize / 2 + 5);
-  });
-}
-
-startClock();
-
-try {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved && THEMES.includes(saved)) {
-    applyTheme(saved);
-  } else if (isNight()) {
-    applyTheme('auto');
-  }
-} catch (e) {
-  if (isNight()) document.body.classList.add('dark-mode');
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    saveActive();
-    stopClock();
-  } else {
-    startClock();
-  }
+helpToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  toggleHelpPanel();
 });
 
-window.addEventListener('beforeunload', saveActive);
+const backdrop = helpPanel.querySelector('.help-panel-backdrop');
+if (backdrop) {
+  backdrop.addEventListener('click', () => {
+    closeHelpPanel();
+  });
+}
 
-function loadNote(index, focus = true) {
+/* ---------- Panel: lista de notas ---------- */
+
+function renderHelpNotes() {
+  helpNotesList.innerHTML = '';
+
+  if (notes.length === 0) {
+    helpNotesEmpty.style.display = 'block';
+    return;
+  }
+
+  helpNotesEmpty.style.display = 'none';
+
+  notes.forEach((n, index) => {
+    const item = document.createElement('li');
+    item.className = 'help-note-item' + (index === activeIndex ? ' active' : '');
+    item.setAttribute('role', 'button');
+    item.setAttribute('tabindex', '0');
+    item.setAttribute('aria-label', `Nota ${index + 1}`);
+
+    const lineas = (n.body || '').split('\n');
+    const titleText = lineas[0] || 'Sin título';
+    const cuerpoRestante = lineas.slice(1).join(' ').trim();
+
+    const title = document.createElement('div');
+    title.className = 'help-note-title';
+    title.textContent = titleText;
+
+    const preview = document.createElement('div');
+    preview.className = 'help-note-preview';
+    preview.textContent = cuerpoRestante ? cuerpoRestante.slice(0, 60) + (cuerpoRestante.length > 60 ? '…' : '') : '';
+
+    item.appendChild(title);
+    item.appendChild(preview);
+
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectHelpNote(index);
+    });
+
+    item.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectHelpNote(index);
+      }
+    });
+
+    helpNotesList.appendChild(item);
+  });
+}
+
+function selectHelpNote(index) {
   if (index < 0 || index >= notes.length) return;
-  activeIndex = index;
-  note.value = notes[activeIndex].body || '';
-  note.readOnly = isReadOnly;
-  try {
-    localStorage.setItem(ACTIVE_KEY, String(activeIndex));
-  } catch (e) {}
-  if (focus) {
-    note.focus();
-    if (isCoarse) {
-      const end = note.value.length;
-      try {
-        note.setSelectionRange(end, end);
-      } catch (e) {}
-    }
-  }
-  showShortcutHint();
-}
-
-function saveActive() {
-  if (notes[activeIndex] && !isReadOnly) {
-    notes[activeIndex].body = note.value;
-    notes[activeIndex].updated = Date.now();
-    saveNotes();
-    if (isLoggedIn()) {
-      syncUpload().catch((err) => {
-        console.error('[Room] Error subiendo nota al guardar:', err);
-        updateSyncStatus('error', err.message);
-      });
-    }
-  }
-}
-
-function debouncedSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveActive, 800);
-}
-
-function baseHintText() {
-  const total = notes.length;
-  const current = activeIndex + 1;
-  const readOnlyText = isReadOnly ? (isCoarse ? ' · lectura' : '  ·  Solo lectura') : '';
-  if (isCoarse) {
-    return `${current} / ${total} · ← → notas · ↓ nueva · ↑ acciones${readOnlyText}`;
-  }
-  return `Nota ${current} de ${total}  ·  Alt+N nueva  ·  Alt+B eliminar  ·  Alt+← → cambiar  ·  Alt+Q pantalla  ·  Alt+D exportar  ·  Alt+E exportar todo  ·  Alt+I importar  ·  Alt+R lectura${readOnlyText}`;
-}
-
-function showShortcutHint() {
-  hint.textContent = baseHintText();
-  hint.style.opacity = '1';
-  clearTimeout(hintTimer);
-  clearTimeout(hintResetTimer);
-  hintTimer = setTimeout(() => {
-    hint.style.opacity = isCoarse ? '0.45' : '0';
-  }, 5000);
-}
-
-function showTransient(text, ms = 5000) {
-  hint.textContent = text;
-  hint.style.opacity = '1';
-  clearTimeout(hintTimer);
-  clearTimeout(hintResetTimer);
-  hintResetTimer = setTimeout(showShortcutHint, ms);
-}
-
-function showStatus(text) {
-  showTransient(text);
-}
-
-function showTypingStats() {
-  const text = note.value || '';
-  const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-  const chars = text.length;
-  showTransient(`${words} palabras · ${chars} caracteres`, 4000);
+  loadNote(index, true);
+  closeHelpPanel();
 }
 
 /* ---------- Operaciones aritméticas ---------- */
@@ -850,28 +373,29 @@ function formatResult(n) {
 
 function checkArithmetic() {
   const val = note.value;
-  const lines = val.split('\n');
-  const lastIdx = lines.length - 1;
-  const lastLine = lines[lastIdx];
-  const trimmed = lastLine.trimEnd();
+  const trimmed = val.trimEnd();
 
   if (!trimmed.endsWith('=')) return;
 
-  const expr = trimmed.slice(0, -1).trim();
+  const lines = val.split('\n');
+  const lastIdx = lines.length - 1;
+  const lastLine = lines[lastIdx];
+  const expr = lastLine.trimEnd().slice(0, -1).trim();
+
   if (!expr) return;
 
   try {
     const result = evaluate(expr);
     const formatted = formatResult(result);
-    isProgrammaticChange = true;
     lines[lastIdx] = lastLine.replace(/=\s*$/, `= ${formatted}`);
     note.value = lines.join('\n');
     note.setSelectionRange(note.value.length, note.value.length);
-    isProgrammaticChange = false;
   } catch (err) {
     // No es una expresión aritmética válida: se deja tal cual
   }
 }
+
+/* ---------- Import / Export ---------- */
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -884,38 +408,18 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-async function shareFile(blob, filename, type) {
-  if (!isCoarse || !navigator.share || !navigator.canShare) return false;
-  try {
-    const file = new File([blob], filename, { type });
-    if (!navigator.canShare({ files: [file] })) return false;
-    await navigator.share({ files: [file], title: filename });
-    return true;
-  } catch (err) {
-    if (err && err.name === 'AbortError') return null;
-    return false;
-  }
-}
-
-async function exportOneNote() {
+function exportOneNote() {
   const text = note.value || '';
   const filename = `nota-${Date.now()}.txt`;
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const shared = await shareFile(blob, filename, 'text/plain');
-  if (shared === null) return;
-  if (!shared) downloadBlob(blob, filename);
-  showStatus(shared ? 'Nota compartida' : 'Nota exportada');
+  downloadBlob(blob, filename);
 }
 
-async function exportAllNotes() {
-  saveActive();
+function exportAllNotes() {
   const data = JSON.stringify(notes, null, 2);
   const filename = `room-respaldo-${Date.now()}.json`;
   const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
-  const shared = await shareFile(blob, filename, 'application/json');
-  if (shared === null) return;
-  if (!shared) downloadBlob(blob, filename);
-  showStatus(shared ? 'Respaldo compartido' : 'Respaldo exportado');
+  downloadBlob(blob, filename);
 }
 
 function importNotes() {
@@ -941,10 +445,7 @@ fileInput.addEventListener('change', (e) => {
           }));
           saveNotes();
           activeIndex = 0;
-          loadNote(0, !isCoarse);
-          showStatus(`${notes.length} notas importadas`);
-        } else {
-          showStatus('Archivo JSON vacío o inválido');
+          loadNote(0);
         }
       } else {
         notes.push({
@@ -954,16 +455,41 @@ fileInput.addEventListener('change', (e) => {
           updated: Date.now()
         });
         saveNotes();
-        loadNote(notes.length - 1, !isCoarse);
-        showStatus('Nota importada');
+        loadNote(notes.length - 1);
       }
-    } catch (err) {
-      showStatus('Error al importar el archivo');
-    }
+    } catch (err) {}
     fileInput.value = '';
   };
   reader.readAsText(file);
 });
+
+/* ---------- Navegación de notas ---------- */
+
+function loadNote(index, focus = true) {
+  if (index < 0 || index >= notes.length) return;
+  activeIndex = index;
+  note.value = notes[activeIndex].body || '';
+  note.readOnly = isReadOnly;
+  try {
+    localStorage.setItem(ACTIVE_KEY, String(activeIndex));
+  } catch (e) {}
+  if (focus) {
+    note.focus();
+  }
+}
+
+function saveActive() {
+  if (notes[activeIndex] && !isReadOnly) {
+    notes[activeIndex].body = note.value;
+    notes[activeIndex].updated = Date.now();
+    saveNotes();
+  }
+}
+
+function debouncedSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveActive, 400);
+}
 
 function createNote() {
   saveActive();
@@ -976,85 +502,22 @@ function createNote() {
   notes.push(newNote);
   saveNotes();
   loadNote(notes.length - 1, true);
-  recordNoteCreated();
-  vibrate(10);
-  if (isLoggedIn()) {
-    syncUpload().catch((err) => {
-      console.error('[Room] Error subiendo nueva nota:', err);
-      updateSyncStatus('error', err.message);
-    });
-  }
-}
-
-function showUndo() {
-  clearTimeout(undoTimer);
-  undoToast.classList.add('visible');
-  undoTimer = setTimeout(hideUndo, 5000);
-}
-
-function hideUndo() {
-  clearTimeout(undoTimer);
-  undoToast.classList.remove('visible');
-  deletedNote = null;
-  deletedIndex = -1;
-  deletedPlaceholderId = null;
 }
 
 function deleteNote() {
   saveActive();
   if (notes.length === 0) return;
-  const removed = notes.splice(activeIndex, 1)[0];
-  deletedNote = removed;
-  deletedIndex = activeIndex;
-  deletedPlaceholderId = null;
-  recordNoteDeleted();
+  notes.splice(activeIndex, 1);
   saveNotes();
-
   if (notes.length === 0) {
-    const placeholder = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      title: '',
-      body: '',
-      updated: Date.now()
-    };
-    notes.push(placeholder);
-    deletedPlaceholderId = placeholder.id;
+    notes.push({ id: Date.now().toString(), title: '', body: '', updated: Date.now() });
     saveNotes();
     activeIndex = 0;
   } else if (activeIndex >= notes.length) {
     activeIndex = notes.length - 1;
   }
-
-  loadNote(activeIndex, !isCoarse);
-  showUndo();
-  vibrate(20);
-  if (isLoggedIn()) {
-    syncUpload().catch((err) => {
-      console.error('[Room] Error subiendo eliminación de nota:', err);
-      updateSyncStatus('error', err.message);
-    });
-  }
+  loadNote(activeIndex, true);
 }
-
-undoBtn.addEventListener('click', () => {
-  if (!deletedNote) return;
-  const restored = deletedNote;
-  const index = deletedIndex;
-  const placeholderId = deletedPlaceholderId;
-  hideUndo();
-
-  if (placeholderId) {
-    const placeholderIndex = notes.findIndex((n) => n.id === placeholderId);
-    if (placeholderIndex !== -1 && !notes[placeholderIndex].body && !notes[placeholderIndex].title) {
-      notes.splice(placeholderIndex, 1);
-    }
-  }
-
-  notes.splice(Math.min(index, notes.length), 0, restored);
-  saveNotes();
-  loadNote(Math.min(index, notes.length - 1), !isCoarse);
-  showStatus('Nota restaurada');
-});
 
 function goNext() {
   saveActive();
@@ -1069,576 +532,177 @@ function goPrev() {
 function toggleReadOnly() {
   isReadOnly = !isReadOnly;
   note.readOnly = isReadOnly;
-  if (isCoarse) {
-    if (isReadOnly) note.blur();
-  } else {
-    note.focus();
-  }
-  showStatus(isReadOnly ? 'Solo lectura · desliza ↑ para acciones' : 'Edición activada');
+  note.focus();
 }
 
-function toggleHelp(force) {
-  const show = typeof force === 'boolean' ? force : helpOverlay.style.display !== 'flex';
-  helpOverlay.style.display = show ? 'flex' : 'none';
-  helpOverlay.setAttribute('aria-hidden', String(!show));
-  if (show) {
-    note.blur();
-    setTimeout(() => {
-      if (helpOverlay.style.display === 'flex') {
-        helpCard.focus({ preventScroll: true });
-      }
-    }, 0);
-  } else if (isCoarse) {
-    handleHit.focus({ preventScroll: true });
-  } else {
-    note.focus();
-  }
-}
-
-function openSheet() {
-  if (sheetOpen) return;
-  sheetOpen = true;
-  note.blur();
-  const readOnlyButton = actionSheet.querySelector('[data-action="readonly"]');
-  if (readOnlyButton) {
-    readOnlyButton.textContent = isReadOnly ? 'Desactivar solo lectura' : 'Activar solo lectura';
-  }
-  actionSheet.classList.add('open');
-  actionSheet.setAttribute('aria-hidden', 'false');
-  sheetPanel.style.transform = '';
-  setTimeout(() => {
-    if (sheetOpen) sheetPanel.focus({ preventScroll: true });
-  }, 50);
-}
-
-function closeSheet() {
-  if (!sheetOpen) return;
-  sheetOpen = false;
-  actionSheet.classList.remove('open');
-  actionSheet.setAttribute('aria-hidden', 'true');
-  sheetPanel.style.transform = '';
-  sheetPanel.style.transition = '';
-  if (isCoarse) {
-    handleHit.focus({ preventScroll: true });
-  } else {
-    note.focus();
-  }
-}
-
-actionSheet.addEventListener('click', (e) => {
-  if (e.target.closest('[data-close]')) {
-    closeSheet();
-    return;
-  }
-  const button = e.target.closest('[data-action]');
-  if (!button) return;
-  const action = button.dataset.action;
-  closeSheet();
-  switch (action) {
-    case 'new':
-      createNote();
-      break;
-    case 'delete':
-      deleteNote();
-      break;
-    case 'export-one':
-      exportOneNote();
-      break;
-    case 'export-all':
-      exportAllNotes();
-      break;
-    case 'import':
-      importNotes();
-      break;
-    case 'readonly':
-      toggleReadOnly();
-      break;
-    case 'help':
-      toggleHelp(true);
-      break;
-  }
-});
-
-handleHit.addEventListener('click', openSheet);
-
-helpOverlay.addEventListener('click', () => toggleHelp(false));
-
-note.addEventListener('input', () => {
-  if (isProgrammaticChange) return;
-  debouncedSave();
-  clearTimeout(typingTimer);
-  typingTimer = setTimeout(showTypingStats, 2000);
-  checkArithmetic();
-  recordTyping();
-});
-
-note.addEventListener('blur', saveActive);
+/* ---------- Atajos de teclado (sin UI visible) ---------- */
 
 document.addEventListener('keydown', (e) => {
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const key = e.key.toLowerCase();
 
-  if (e.key === 'Escape') {
-    if (sheetOpen) {
-      e.preventDefault();
-      closeSheet();
-      return;
-    }
-    if (helpOverlay.style.display === 'flex') {
-      e.preventDefault();
-      toggleHelp(false);
-      return;
-    }
-    if (hubOverlay.style.display === 'flex') {
-      e.preventDefault();
-      toggleHub(false);
-      return;
-    }
-  }
-
-  if (hubOverlay.style.display === 'flex') return;
-
-  if (sheetOpen) return;
-
-  if (helpOverlay.style.display === 'flex') {
+  if (key === 'escape' && helpPanel.classList.contains('open')) {
     e.preventDefault();
-    toggleHelp(false);
+    closeHelpPanel();
     return;
   }
 
-  if (e.altKey && key === KEYS.NEW) {
+  if (e.altKey && key === 'n') {
     e.preventDefault();
     createNote();
+    showShortcutIndicator('Nueva nota');
     return;
   }
 
-  if (e.altKey && key === KEYS.DELETE) {
+  if (e.altKey && key === 'b') {
     e.preventDefault();
     deleteNote();
+    showShortcutIndicator('Eliminar nota');
     return;
   }
 
-  if (e.altKey && (key === KEYS.PREV || key === KEYS.NEXT)) {
+  if (e.altKey && (key === 'arrowleft' || key === 'left')) {
     e.preventDefault();
-    if (key === KEYS.PREV) goPrev();
-    else goNext();
+    goPrev();
+    showShortcutIndicator('Nota anterior');
     return;
   }
 
-  if (e.altKey && key === KEYS.FULLSCREEN) {
+  if (e.altKey && (key === 'arrowright' || key === 'right')) {
+    e.preventDefault();
+    goNext();
+    showShortcutIndicator('Siguiente nota');
+    return;
+  }
+
+  if (e.altKey && key === 'q') {
     e.preventDefault();
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
+      showShortcutIndicator('Pantalla completa');
     } else {
       document.exitFullscreen();
+      showShortcutIndicator('Ventana normal');
     }
     return;
   }
 
-  if (e.altKey && key === KEYS.EXPORT_ONE) {
+  if (e.altKey && key === 'd') {
     e.preventDefault();
     exportOneNote();
+    showShortcutIndicator('Exportar nota');
     return;
   }
 
-  if (e.altKey && key === KEYS.EXPORT_ALL) {
+  if (e.altKey && key === 'e') {
     e.preventDefault();
     exportAllNotes();
+    showShortcutIndicator('Exportar todas');
     return;
   }
 
-  if (e.altKey && key === KEYS.IMPORT) {
+  if (e.altKey && key === 'i') {
     e.preventDefault();
     importNotes();
+    showShortcutIndicator('Importar notas');
     return;
   }
 
-  if (e.altKey && key === KEYS.READONLY) {
+  if (e.altKey && key === 'r') {
     e.preventDefault();
     toggleReadOnly();
+    showShortcutIndicator(isReadOnly ? 'Solo lectura' : 'Edición');
     return;
   }
 
-  if (e.altKey && key === KEYS.THEME) {
+  if (e.altKey && key === 'o') {
     e.preventDefault();
     toggleTheme();
     return;
   }
 
-  if (e.altKey && key === '2') {
-    e.preventDefault();
-    toggleHub();
-    return;
-  }
-
-  if (e.altKey && key === KEYS.HELP) {
-    e.preventDefault();
-    toggleHelp();
-    return;
-  }
-
-  if (e.altKey && key === KEYS.CLOSE) {
+  if (e.altKey && key === 'backspace') {
     e.preventDefault();
     if (!isCoarse) window.close();
+    showShortcutIndicator('Cerrar');
+  }
+
+  if (e.altKey && key === 'v') {
+    e.preventDefault();
+    toggleHelpPanel();
+    showShortcutIndicator(helpPanel.classList.contains('open') ? 'Notas' : 'Cerrado');
+  }
+
+  if (e.altKey && (key === '+' || key === '=')) {
+    e.preventDefault();
+    increaseFontSize();
+    return;
+  }
+
+  if (e.altKey && key === '-') {
+    e.preventDefault();
+    decreaseFontSize();
+    return;
   }
 });
 
-/* ---------- Gestos ---------- */
+/* ---------- Eventos de la nota ---------- */
 
-function initViewport() {
-  if (!window.visualViewport) return;
-  const vv = window.visualViewport;
-  const update = () => {
-    document.documentElement.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
-  };
-  vv.addEventListener('resize', update);
-  vv.addEventListener('scroll', update);
-  update();
-}
+note.addEventListener('focus', () => {
+  clearTimeout(modeTimer);
+  clock.style.opacity = '0';
+  setTimeout(() => { clock.style.display = 'none'; }, 300);
+  modeIndicator.style.opacity = '0';
+  setTimeout(() => { modeIndicator.style.display = 'none'; }, 300);
+  closeHelpPanel();
+});
 
-function animatePage(direction, focus) {
-  const width = note.clientWidth || window.innerWidth;
-  note.style.transition = 'transform 170ms cubic-bezier(0.2, 0.7, 0.3, 1)';
-  note.style.transform = `translateX(${-direction * width}px)`;
+note.addEventListener('input', () => {
+  debouncedSave();
+  checkArithmetic();
+});
 
-  setTimeout(() => {
-    loadNote(activeIndex + direction, focus);
-    note.style.transition = 'none';
-    note.style.transform = `translateX(${direction * width}px)`;
-    void note.offsetWidth;
-    note.style.transition = 'transform 170ms cubic-bezier(0.2, 0.7, 0.3, 1)';
-    note.style.transform = 'translateX(0)';
-    setTimeout(() => {
-      note.style.transition = '';
-      note.style.transform = '';
-    }, 190);
-  }, 180);
-}
+note.addEventListener('blur', () => {
+  saveActive();
+  clock.style.display = 'block';
+  clock.style.opacity = '1';
+  modeIndicator.style.display = 'none';
+  modeIndicator.style.opacity = '0';
+});
 
-function initGestures() {
-  let animating = false;
-  let suppressClickUntil = 0;
+/* ---------- Ciclo de vida ---------- */
 
-  document.addEventListener(
-    'click',
-    (e) => {
-      if (performance.now() < suppressClickUntil) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    },
-    true
-  );
-
-  function navigateBySwipe(dx, focus) {
-    if (animating) return false;
-    const direction = dx < 0 ? 1 : -1;
-    const canGo = direction === 1 ? activeIndex < notes.length - 1 : activeIndex > 0;
-    if (!canGo) return false;
-    animating = true;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
     saveActive();
-    animatePage(direction, focus);
-    setTimeout(() => {
-      animating = false;
-    }, 380);
-    return true;
+    stopClock();
+  } else {
+    startClock();
   }
+});
 
-  /* Swipe horizontal sobre la nota */
-  let swipe = null;
+window.addEventListener('beforeunload', saveActive);
 
-  note.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') return;
-    if (!e.isPrimary) {
-      if (swipe) {
-        swipe.cancelled = true;
-        note.style.transition = '';
-        note.style.transform = '';
-      }
-      return;
+startClock();
+
+try {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved && THEMES.includes(saved)) {
+    applyTheme(saved);
+  } else {
+    applyTheme('light');
+  }
+} catch (e) {}
+
+try {
+  const savedSize = localStorage.getItem('room_font_size');
+  if (savedSize) {
+    fontSize = parseInt(savedSize, 10);
+    if (isNaN(fontSize) || fontSize < 16 || fontSize > 32) {
+      fontSize = isCoarse ? 20 : 22;
     }
-    if (animating) return;
-    swipe = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startTime: performance.now(),
-      axis: null,
-      moved: false,
-      cancelled: false,
-      wasEditing: document.activeElement === note
-    };
-  });
-
-  note.addEventListener('pointermove', (e) => {
-    if (!swipe || e.pointerId !== swipe.id || swipe.cancelled) return;
-    const now = performance.now();
-    const dx = e.clientX - swipe.startX;
-    const dy = e.clientY - swipe.startY;
-
-    if (!swipe.axis) {
-      if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
-      if (now - swipe.startTime > 350) {
-        swipe.cancelled = true;
-        return;
-      }
-      if (Math.abs(dx) > Math.abs(dy) * 1.25) {
-        swipe.axis = 'x';
-        suppressClickUntil = now + 400;
-        try {
-          note.setPointerCapture(e.pointerId);
-        } catch (err) {}
-      } else {
-        swipe.axis = 'y';
-        return;
-      }
-    }
-
-    if (swipe.axis !== 'x') return;
-    swipe.moved = true;
-    if (e.cancelable) e.preventDefault();
-
-    const atFirst = activeIndex === 0;
-    const atLast = activeIndex === notes.length - 1;
-    let offset = dx;
-    if ((dx > 0 && atFirst) || (dx < 0 && atLast)) {
-      offset = dx * 0.35;
-    }
-    note.style.transition = 'none';
-    note.style.transform = `translateX(${offset}px)`;
-  });
-
-  const endSwipe = (e) => {
-    if (!swipe || e.pointerId !== swipe.id) return;
-    const current = swipe;
-    swipe = null;
-    note.style.transition = '';
-    if (current.axis !== 'x' || !current.moved || current.cancelled) {
-      note.style.transform = '';
-      return;
-    }
-
-    const dx = e.clientX - current.startX;
-    const elapsed = Math.max(1, performance.now() - current.startTime);
-    const velocity = Math.abs(dx) / elapsed;
-    const width = note.clientWidth || window.innerWidth;
-    const passed = Math.abs(dx) > Math.min(120, width * 0.25) || velocity > 0.45;
-    const atFirst = activeIndex === 0;
-    const atLast = activeIndex === notes.length - 1;
-    const canGo = dx < 0 ? !atLast : !atFirst;
-
-    if (passed && canGo) {
-      navigateBySwipe(dx, current.wasEditing);
-    } else {
-      if (passed && !canGo) {
-        showStatus(dx < 0 ? 'Última nota · desliza ↓ para crear' : 'Primera nota');
-      }
-      note.style.transition = 'transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1)';
-      note.style.transform = 'translateX(0)';
-      setTimeout(() => {
-        note.style.transition = '';
-        note.style.transform = '';
-      }, 200);
-    }
-  };
-
-  note.addEventListener('pointerup', endSwipe);
-  note.addEventListener('pointercancel', (e) => {
-    if (!swipe || e.pointerId !== swipe.id) return;
-    swipe = null;
-    note.style.transition = '';
-    note.style.transform = '';
-  });
-  note.addEventListener('contextmenu', () => {
-    if (swipe) swipe.cancelled = true;
-  });
-
-  /* Swipe vertical desde la barra inferior */
-  let statusGesture = null;
-
-  statusBar.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') return;
-    if (!e.isPrimary) {
-      if (statusGesture) {
-        statusGesture = null;
-        statusBar.classList.remove('pulling');
-      }
-      return;
-    }
-    statusGesture = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startTime: performance.now(),
-      axis: null,
-      moved: false
-    };
-  });
-
-  statusBar.addEventListener('pointermove', (e) => {
-    if (!statusGesture || e.pointerId !== statusGesture.id) return;
-    const dx = e.clientX - statusGesture.startX;
-    const dy = e.clientY - statusGesture.startY;
-
-    if (!statusGesture.axis) {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-      statusGesture.axis = Math.abs(dy) > Math.abs(dx) ? 'y' : 'x';
-      statusGesture.moved = true;
-      suppressClickUntil = performance.now() + 400;
-      try {
-        statusBar.setPointerCapture(e.pointerId);
-      } catch (err) {}
-      if (statusGesture.axis === 'y') {
-        statusBar.classList.add('pulling');
-      }
-    }
-
-    if (statusGesture.axis !== 'y') return;
-    if (e.cancelable) e.preventDefault();
-    const pullText = dy < 0 ? 'Suelta para abrir acciones' : 'Suelta para crear nota';
-    if (hint.textContent !== pullText) hint.textContent = pullText;
-    hint.style.opacity = '1';
-  });
-
-  const endStatusGesture = (e) => {
-    if (!statusGesture || e.pointerId !== statusGesture.id) return;
-    const current = statusGesture;
-    statusGesture = null;
-    statusBar.classList.remove('pulling');
-    const dx = e.clientX - current.startX;
-    const dy = e.clientY - current.startY;
-    const elapsed = Math.max(1, performance.now() - current.startTime);
-    const velocity = Math.abs(dy) / elapsed;
-
-    if (current.axis === 'x' && Math.abs(dx) > 40) {
-      navigateBySwipe(dx, document.activeElement === note);
-    } else if (current.axis === 'y' && (Math.abs(dy) > 40 || velocity > 0.4)) {
-      if (dy < 0) openSheet();
-      else createNote();
-    } else {
-      showShortcutHint();
-    }
-  };
-
-  statusBar.addEventListener('pointerup', endStatusGesture);
-  statusBar.addEventListener('pointercancel', () => {
-    statusGesture = null;
-    statusBar.classList.remove('pulling');
-    showShortcutHint();
-  });
-
-  /* Swipe vertical desde arriba: nueva nota */
-  let topGesture = null;
-
-  topZone.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') return;
-    if (!e.isPrimary) {
-      topGesture = null;
-      return;
-    }
-    topGesture = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startTime: performance.now(),
-      axis: null,
-      moved: false
-    };
-    try {
-      topZone.setPointerCapture(e.pointerId);
-    } catch (err) {}
-  });
-
-  topZone.addEventListener('pointermove', (e) => {
-    if (!topGesture || e.pointerId !== topGesture.id) return;
-    const dx = e.clientX - topGesture.startX;
-    const dy = e.clientY - topGesture.startY;
-
-    if (!topGesture.axis) {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-      topGesture.axis = Math.abs(dy) > Math.abs(dx) ? 'y' : 'x';
-      topGesture.moved = true;
-    }
-
-    if (topGesture.axis !== 'y') return;
-    if (e.cancelable) e.preventDefault();
-    if (dy > 20) {
-      const pullText = dy > 50 ? 'Suelta para crear nota' : 'Desliza ↓ para nueva nota';
-      if (hint.textContent !== pullText) hint.textContent = pullText;
-      hint.style.opacity = '1';
-    }
-  });
-
-  const endTopGesture = (e) => {
-    if (!topGesture || e.pointerId !== topGesture.id) return;
-    const current = topGesture;
-    topGesture = null;
-    const dy = e.clientY - current.startY;
-    const elapsed = Math.max(1, performance.now() - current.startTime);
-    const velocity = Math.abs(dy) / elapsed;
-
-    if (current.axis === 'y' && (dy > 50 || (dy > 30 && velocity > 0.4))) {
-      createNote();
-    } else {
-      showShortcutHint();
-    }
-  };
-
-  topZone.addEventListener('pointerup', endTopGesture);
-  topZone.addEventListener('pointercancel', () => {
-    topGesture = null;
-    showShortcutHint();
-  });
-
-  /* Arrastrar la hoja hacia abajo para cerrarla */
-  let sheetGesture = null;
-
-  sheetPanel.addEventListener('pointerdown', (e) => {
-    if (!e.isPrimary || e.pointerType === 'mouse') return;
-    if (!e.target.closest('.sheet-handle, .sheet-title')) return;
-    sheetGesture = {
-      id: e.pointerId,
-      startY: e.clientY,
-      dy: 0,
-      active: false
-    };
-  });
-
-  sheetPanel.addEventListener('pointermove', (e) => {
-    if (!sheetGesture || e.pointerId !== sheetGesture.id) return;
-    const dy = e.clientY - sheetGesture.startY;
-    if (!sheetGesture.active) {
-      if (dy < 8) return;
-      sheetGesture.active = true;
-      sheetPanel.style.transition = 'none';
-      try {
-        sheetPanel.setPointerCapture(e.pointerId);
-      } catch (err) {}
-    }
-    const offset = Math.max(0, dy);
-    sheetGesture.dy = offset;
-    sheetPanel.style.transform = `translateY(${offset}px)`;
-  });
-
-  const endSheetGesture = (e) => {
-    if (!sheetGesture || e.pointerId !== sheetGesture.id) return;
-    const current = sheetGesture;
-    sheetGesture = null;
-    if (!current.active) return;
-    sheetPanel.style.transition = '';
-    if (current.dy > 90) {
-      closeSheet();
-    } else {
-      sheetPanel.style.transform = '';
-    }
-  };
-
-  sheetPanel.addEventListener('pointerup', endSheetGesture);
-  sheetPanel.addEventListener('pointercancel', () => {
-    sheetGesture = null;
-    sheetPanel.style.transition = '';
-    sheetPanel.style.transform = '';
-  });
-}
+  }
+  applyFontSize();
+} catch (e) {}
 
 function hideSplash() {
   try {
@@ -1652,138 +716,10 @@ function hideSplash() {
   }
 }
 
-function initApp() {
-  try {
-    // Verificar si hay una sesión de Supabase persistida y restaurarla
-    if (window.RoomSupabase && window.RoomSupabase.isConfigured()) {
-      const supabase = window.RoomSupabase.getSupabase();
-      if (supabase) {
-        // Escuchar cambios de auth para mantener currentUser actualizado
-        supabase.auth.onAuthStateChange((event, session) => {
-          if (session && session.user) {
-            currentUser = session.user;
-            localStorage.setItem(CURRENT_USER_KEY, currentUser.email);
-            localStorage.setItem(SYNC_ENABLED_KEY, 'true');
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-              syncDownload().then(() => updateSyncStatus('synced')).catch(() => updateSyncStatus('error'));
-              hideLoginModal();
-            }
-          } else {
-            currentUser = null;
-            userPassword = null;
-            localStorage.removeItem(CURRENT_USER_KEY);
-            localStorage.removeItem(SYNC_ENABLED_KEY);
-            updateSyncStatus('disconnected');
-            showLoginModal();
-          }
-        });
+setTimeout(hideSplash, 1500);
 
-        const savedEmail = localStorage.getItem(CURRENT_USER_KEY);
-        const syncEnabled = localStorage.getItem(SYNC_ENABLED_KEY) === 'true';
-
-        if (savedEmail && syncEnabled) {
-          // Intentar obtener la sesión actual de Supabase
-          const { data } = supabase.auth.getSession();
-          if (data.session) {
-            currentUser = data.session.user;
-            // La contraseña no se guarda, por eso no podemos descifrar notas remotas
-            // sin que el usuario la escriba de nuevo
-            showLoginModal();
-            showStatus('Ingresá tu contraseña para sincronizar tus notas');
-            return;
-          }
-        }
-      }
-    }
-
-    loadNotes();
-    loadStats();
-    loadNote(getSavedIndex(), !isCoarse);
-  } catch (e) {
-    console.error('Error inicializando app:', e);
-  }
-  initViewport();
-  if (isCoarse) initGestures();
-}
-
-setTimeout(hideSplash, 2500);
-
-initApp();
-
-/* ---------- Event listeners del modal de login ---------- */
-
-const loginModal = document.getElementById('loginModal');
-const loginForm = document.getElementById('loginForm');
-const loginEmail = document.getElementById('loginEmail');
-const loginPassword = document.getElementById('loginPassword');
-const loginBtn = document.getElementById('loginBtn');
-const skipLoginBtn = document.getElementById('skipLoginBtn');
-const loginError = document.getElementById('loginError');
-const loginTabs = document.querySelectorAll('.login-tab');
-
-let loginMode = 'login'; // 'login' | 'signup'
-
-// Cambiar entre pestañas de login / registro
-loginTabs.forEach((tab) => {
-  tab.addEventListener('click', () => {
-    loginTabs.forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    loginMode = tab.dataset.mode;
-    loginBtn.textContent = loginMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
-    loginError.textContent = '';
-  });
-});
-
-// Enviar formulario de login / registro
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = loginEmail.value.trim();
-  const password = loginPassword.value.trim();
-
-  if (!email || !password) {
-    loginError.textContent = 'Completá todos los campos';
-    return;
-  }
-
-  loginBtn.disabled = true;
-  loginBtn.textContent = loginMode === 'login' ? 'Iniciando sesión...' : 'Creando cuenta...';
-  loginError.textContent = '';
-
-  try {
-    const ok = loginMode === 'login'
-      ? await login(email, password)
-      : await signup(email, password);
-    if (ok) {
-      loginEmail.value = '';
-      loginPassword.value = '';
-    }
-  } catch (err) {
-    loginError.textContent = err.message || 'Error desconocido';
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = loginMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
-  }
-});
-
-// Saltarse sincronización (usar solo localStorage)
-skipLoginBtn.addEventListener('click', () => {
-  localStorage.removeItem(SYNC_ENABLED_KEY);
-  localStorage.removeItem(CURRENT_USER_KEY);
-  hideLoginModal();
-  updateSyncStatus('disconnected');
-  showStatus('Usando almacenamiento local (sin sincronización)');
-});
-
-// Cerrar modal al hacer clic fuera del panel
-loginModal.addEventListener('click', (e) => {
-  if (e.target === loginModal) {
-    if (!isLoggedIn()) {
-      // Si no está logueado, no dejar cerrar sin elegir
-      return;
-    }
-    hideLoginModal();
-  }
-});
+loadNotes();
+loadNote(getSavedIndex(), true);
 
 window.addEventListener('error', (e) => {
   console.error('Error global:', e.error);
