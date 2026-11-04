@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleFullscreen: () => ipcRenderer.send('window-fullscreen'),
   clipboardAPI: {
     getPendingNotes: () => ipcRenderer.invoke('clipboard-get-pending'),
-    clearPendingNotes: () => ipcRenderer.invoke('clipboard-clear-pending')
+    clearPendingNotes: () => ipcRenderer.invoke('clipboard-clear-pending'),
+    onClipboardNote: (callback) => ipcRenderer.on('clipboard-note-detected', (event, note) => callback(note))
   }
 });

@@ -148,6 +148,12 @@ app.whenReady().then(() => {
           console.log('[Room] Usuario hizo clic en notificación');
           savePendingNote(text);
           if (win) {
+            win.webContents.send('clipboard-note-detected', {
+              id: `clipboard-${Date.now()}`,
+              title: 'Portapapeles',
+              body: text,
+              updated: Date.now()
+            });
             win.show();
             win.focus();
           }

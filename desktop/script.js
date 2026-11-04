@@ -757,11 +757,32 @@ loadNote(getSavedIndex(), true);
           notes.push(n);
         });
         saveNotes();
+        // Cargar la última nota del portapapeles en el área de texto
+        const last = pending[pending.length - 1];
+        note.value = last.body;
+        activeIndex = notes.length - 1;
+        try {
+          localStorage.setItem(ACTIVE_KEY, String(activeIndex));
+        } catch (e) {}
         showShortcutIndicator(`${pending.length} nota(s) del portapapeles`);
       }
     }
   } catch (e) {}
 })();
+
+// Escuchar notas del portapapeles en tiempo real
+if (window.electronAPI && window.electronAPI.clipboardAPI) {
+  window.electronAPI.clipboardAPI.onClipboardNote((note) => {
+    notes.push(note);
+    note.value = note.body;
+    activeIndex = notes.length - 1;
+    try {
+      localStorage.setItem(ACTIVE_KEY, String(activeIndex));
+    } catch (e) {}
+    saveNotes();
+    showShortcutIndicator('Nota del portapapeles');
+  });
+}
 
 window.addEventListener('error', (e) => {
   console.error('Error global:', e.error);
