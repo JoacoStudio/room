@@ -139,8 +139,8 @@ app.whenReady().then(() => {
         lastClipboardText = text;
 
         const notification = new Notification({
-          title: 'Room - Texto detectado',
-          body: text.length > 100 ? text.substring(0, 100) + '...' : text,
+          title: 'Room - Copiaste texto',
+          body: 'Haz clic para guardarlo como nota: ' + (text.length > 80 ? text.substring(0, 80) + '...' : text),
           icon: path.join(__dirname, 'Ic.ico')
         });
 
