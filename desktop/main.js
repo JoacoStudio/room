@@ -44,9 +44,12 @@ function toggleWindow() {
   console.log('[Room] toggleWindow ejecutado');
   if (win) {
     console.log('[Room] ventana existe, visible:', win.isVisible(), 'minimizada:', win.isMinimized());
-    if (win.isMinimized()) win.restore();
-    if (!win.isVisible()) win.show();
-    win.focus();
+    if (win.isMinimized()) {
+      win.restore();
+      win.showInactive(); // restaurar sin animación de entrada ni robo de foco
+    } else if (!win.isVisible()) {
+      win.show();
+    }
   } else {
     console.log('[Room] ventana no existe, creando...');
     createWindow();
