@@ -673,13 +673,36 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- Eventos de la nota ---------- */
 
-note.addEventListener('focus', () => {
+async function processClipboardNotes() {
+  try {
+    if (window.electronAPI && window.electronAPI.clipboardAPI) {
+      const pending = await window.electronAPI.clipboardAPI.checkPendingNotes();
+      if (pending && pending.length > 0) {
+        pending.forEach((n) => {
+          notes.push(n);
+        });
+        saveNotes();
+        // Cargar la última nota del portapapeles en el área de texto
+        const last = pending[pending.length - 1];
+        note.value = last.body;
+        activeIndex = notes.length - 1;
+        try {
+          localStorage.setItem(ACTIVE_KEY, String(activeIndex));
+        } catch (e) {}
+        showShortcutIndicator(`${pending.length} nota(s) del portapapeles`);
+      }
+    }
+  } catch (e) {}
+}
+
+note.addEventListener('focus', async () => {
   clearTimeout(modeTimer);
   clock.style.opacity = '0';
   setTimeout(() => { clock.style.display = 'none'; }, 300);
   modeIndicator.style.opacity = '0';
   setTimeout(() => { modeIndicator.style.display = 'none'; }, 300);
   closeHelpPanel();
+  await processClipboardNotes();
 });
 
 note.addEventListener('input', () => {
@@ -747,28 +770,8 @@ setTimeout(hideSplash, 1500);
 loadNotes();
 loadNote(getSavedIndex(), true);
 
-// Fusionar notas capturadas del portapapeles
-(async () => {
-  try {
-    if (window.electronAPI && window.electronAPI.clipboardAPI) {
-      const pending = await window.electronAPI.clipboardAPI.getPendingNotes();
-      if (pending && pending.length > 0) {
-        pending.forEach((n) => {
-          notes.push(n);
-        });
-        saveNotes();
-        // Cargar la última nota del portapapeles en el área de texto
-        const last = pending[pending.length - 1];
-        note.value = last.body;
-        activeIndex = notes.length - 1;
-        try {
-          localStorage.setItem(ACTIVE_KEY, String(activeIndex));
-        } catch (e) {}
-        showShortcutIndicator(`${pending.length} nota(s) del portapapeles`);
-      }
-    }
-  } catch (e) {}
-})();
+// Fusionar notas capturadas del portapapeles al iniciar
+await processClipboardNotes();
 
 // Escuchar notas del portapapeles en tiempo real
 if (window.electronAPI && window.electronAPI.clipboardAPI) {

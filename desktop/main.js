@@ -236,3 +236,9 @@ ipcMain.handle('clipboard-get-pending', async () => {
 ipcMain.handle('clipboard-clear-pending', async () => {
   writePendingNotes([]);
 });
+
+ipcMain.handle('clipboard-check-pending', async () => {
+  const notes = readPendingNotes();
+  writePendingNotes([]);
+  return notes;
+});
