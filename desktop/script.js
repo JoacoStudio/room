@@ -7,10 +7,6 @@ const helpToggle = document.getElementById('help-toggle');
 const helpPanel = document.getElementById('help-panel');
 const helpNotesList = document.getElementById('help-notes-list');
 const helpNotesEmpty = document.getElementById('help-notes-empty');
-const findOverlay = document.getElementById('find-overlay');
-const findInput = document.getElementById('find-input');
-const findCounter = document.getElementById('find-counter');
-const findClose = document.getElementById('find-close');
 
 const STORAGE_KEY = 'minimalist_notes';
 const ACTIVE_KEY = 'room_active_index';
@@ -26,10 +22,6 @@ let isReadOnly = false;
 let clockInterval = null;
 let currentTheme = 'light';
 let fontSize = 22;
-
-let findMatches = [];
-let findCurrentIndex = -1;
-let findTerm = '';
 
 const isCoarse = window.matchMedia('(pointer: coarse)').matches;
 if (isCoarse) fontSize = 20;
@@ -200,62 +192,6 @@ function decreaseFontSize() {
     applyFontSize();
     showShortcutIndicator('Tamaño ' + fontSize + 'px');
   }
-}
-
-/* ---------- Búsqueda dentro de la nota (Ctrl + F) ---------- */
-
-function openFind() {
-  findOverlay.style.display = 'flex';
-  findInput.focus();
-  findInput.select();
-}
-
-function closeFind() {
-  findOverlay.style.display = 'none';
-  findInput.value = '';
-  findTerm = '';
-  findMatches = [];
-  findCurrentIndex = -1;
-  findCounter.textContent = '';
-  note.setSelectionRange(note.value.length, note.value.length);
-}
-
-function performSearch(term) {
-  findTerm = term;
-  findMatches = [];
-  findCurrentIndex = -1;
-  findCounter.textContent = '';
-
-  if (!term) {
-    note.setSelectionRange(note.value.length, note.value.length);
-    return;
-  }
-
-  const text = note.value;
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(escaped, 'gi');
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    findMatches.push({ start: match.index, end: match.index + match[0].length });
-  }
-
-  if (findMatches.length > 0) {
-    findCurrentIndex = 0;
-    goToMatch(findCurrentIndex);
-  } else {
-    findCounter.textContent = 'Sin coincidencias';
-  }
-}
-
-function goToMatch(index) {
-  if (index < 0 || index >= findMatches.length) return;
-  const m = findMatches[index];
-  note.focus();
-  note.setSelectionRange(m.start, m.end);
-  const scrollTop = (m.start / Math.max(note.value.length, 1)) * note.scrollHeight;
-  note.scrollTop = Math.max(0, scrollTop - note.clientHeight / 2);
-  findCounter.textContent = `${index + 1} de ${findMatches.length}`;
 }
 
 /* ---------- Panel de ayuda (clic en ralla) ---------- */
@@ -630,21 +566,9 @@ function toggleReadOnly() {
 document.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
 
-  if (key === 'escape' && findOverlay.style.display === 'flex') {
-    e.preventDefault();
-    closeFind();
-    return;
-  }
-
   if (key === 'escape' && helpPanel.classList.contains('open')) {
     e.preventDefault();
     closeHelpPanel();
-    return;
-  }
-
-  if ((e.ctrlKey || e.metaKey) && key === 'f') {
-    e.preventDefault();
-    openFind();
     return;
   }
 
@@ -756,7 +680,6 @@ note.addEventListener('focus', () => {
   modeIndicator.style.opacity = '0';
   setTimeout(() => { modeIndicator.style.display = 'none'; }, 300);
   closeHelpPanel();
-  closeFind();
 });
 
 note.addEventListener('input', () => {
@@ -770,29 +693,6 @@ note.addEventListener('blur', () => {
   clock.style.opacity = '1';
   modeIndicator.style.display = 'none';
   modeIndicator.style.opacity = '0';
-  closeFind();
-});
-
-findInput.addEventListener('input', (e) => {
-  performSearch(e.target.value);
-});
-
-findInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    if (findMatches.length > 0) {
-      findCurrentIndex = (findCurrentIndex + 1) % findMatches.length;
-      goToMatch(findCurrentIndex);
-    }
-  }
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    closeFind();
-  }
-});
-
-findClose.addEventListener('click', () => {
-  closeFind();
 });
 
 /* ---------- Ciclo de vida ---------- */
