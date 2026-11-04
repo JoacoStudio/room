@@ -733,25 +733,34 @@ window.addEventListener('beforeunload', saveActive);
 
 startClock();
 
-try {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved && THEMES.includes(saved)) {
-    applyTheme(saved);
-  } else {
-    applyTheme('light');
-  }
-} catch (e) {}
-
-try {
-  const savedSize = localStorage.getItem('room_font_size');
-  if (savedSize) {
-    fontSize = parseInt(savedSize, 10);
-    if (isNaN(fontSize) || fontSize < 16 || fontSize > 32) {
-      fontSize = isCoarse ? 20 : 22;
+// Inicialización asíncrona del tema, tamaño de letra y notas del portapapeles
+(async () => {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved && THEMES.includes(saved)) {
+      applyTheme(saved);
+    } else {
+      applyTheme('light');
     }
+  } catch (e) {}
+
+  try {
+    const savedSize = localStorage.getItem('room_font_size');
+    if (savedSize) {
+      fontSize = parseInt(savedSize, 10);
+      if (isNaN(fontSize) || fontSize < 16 || fontSize > 32) {
+        fontSize = isCoarse ? 20 : 22;
+      }
+    }
+    applyFontSize();
+  } catch (e) {}
+
+  try {
+    await processClipboardNotes();
+  } catch (e) {
+    console.error('Error cargando notas del portapapeles:', e);
   }
-  applyFontSize();
-} catch (e) {}
+})();
 
 function hideSplash() {
   try {
@@ -769,9 +778,6 @@ setTimeout(hideSplash, 1500);
 
 loadNotes();
 loadNote(getSavedIndex(), true);
-
-// Fusionar notas capturadas del portapapeles al iniciar
-await processClipboardNotes();
 
 // Escuchar notas del portapapeles en tiempo real
 if (window.electronAPI && window.electronAPI.clipboardAPI) {
