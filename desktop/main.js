@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Tray, nativeImage, ipcMain, clipboard, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, nativeImage, ipcMain, clipboard, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -7,6 +7,7 @@ let tray = null;
 let isQuitting = false;
 let lastClipboardText = '';
 const PENDING_FILE = path.join(__dirname, 'clipboard_notes.json');
+const clipboardInterval = null;
 
 function readPendingNotes() {
   try {
@@ -128,25 +129,33 @@ app.whenReady().then(() => {
   createTray();
 
   // Monitoreo de portapapeles cada 3 segundos
-  setInterval(() => {
+  const clipboardInterval = setInterval(() => {
     try {
       const text = clipboard.readText();
       if (text && text.length > 50 && text !== lastClipboardText) {
+        console.log('[Room] Portapapeles detectado:', text.substring(0, 100));
         lastClipboardText = text;
-        dialog.showMessageBox(win, {
-          type: 'question',
-          title: 'Room - Portapapeles',
-          message: '¿Guardar este texto como nota?',
-          detail: text.substring(0, 300) + (text.length > 300 ? '...' : ''),
-          buttons: ['Guardar', 'Descartar'],
-          cancelId: 1
-        }).then((result) => {
-          if (result.response === 0) {
-            savePendingNote(text);
+
+        const notification = new Notification({
+          title: 'Room - Texto detectado',
+          body: text.length > 100 ? text.substring(0, 100) + '...' : text,
+          icon: path.join(__dirname, 'Ic.ico')
+        });
+
+        notification.on('click', () => {
+          savePendingNote(text);
+          if (win) {
+            win.show();
+            win.focus();
           }
         });
+
+        notification.show();
+        console.log('[Room] Notificación mostrada');
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Room] Error monitoreando portapapeles:', e);
+    }
   }, 3000);
 
   app.on('activate', () => {
