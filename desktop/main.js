@@ -5,7 +5,7 @@ const fs = require('fs');
 let win = null;
 let tray = null;
 let isQuitting = false;
-let lastClipboardText = '';
+let lastClipboardText = null; // null = no se ha leído aún (primera vez)
 const PENDING_FILE = path.join(__dirname, 'clipboard_notes.json');
 
 function readPendingNotes() {
@@ -57,6 +57,7 @@ function createWindow() {
   win.loadFile(indexPath).catch((err) => {
     console.error('[Room] Error cargando index.html:', err);
   });
+  win.show();
 
   win.on('close', (e) => {
     if (process.platform === 'win32' && !isQuitting) {
@@ -134,6 +135,13 @@ app.whenReady().then(() => {
       try {
         const text = clipboard.readText();
         console.log('[Room] Monitoreando portapapeles:', text ? text.length + ' chars' : 'vacío');
+
+        // Primera vez: solo guardar el valor actual sin mostrar notificación
+        if (lastClipboardText === null) {
+          lastClipboardText = text || '';
+          console.log('[Room] Inicializando monitoreo de portapapeles (valor inicial guardado)');
+          return;
+        }
 
         if (text && text.length > 50 && text !== lastClipboardText) {
           console.log('[Room] Portapapeles detectado (>50 chars):', text.substring(0, 100));
