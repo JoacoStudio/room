@@ -251,3 +251,57 @@ ipcMain.handle('clipboard-check-pending', async () => {
   writePendingNotes([]);
   return notes;
 });
+
+// ---------- IA Local: Nemotron 3.5 Super VL 120B A12B (NVIDIA NIM) ----------
+
+async function analizarConNemotron(texto) {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) {
+    console.error('[Room IA] Falta NVIDIA_API_KEY en las variables de entorno');
+    return { error: 'NVIDIA_API_KEY no configurada' };
+  }
+
+  try {
+    const respuesta = await fetch('https://api.nim.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'nemotron-3.5-super-vl-120b-a12b',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Eres un asistente de análisis de notas personal llamado Room. Tu trabajo es leer el contenido de una nota escrita por el usuario y emitir un "pensamiento" (reasoning) breve y claro en español. Analiza qué dice la nota, detecta temas, emociones, tareas pendientes o ideas clave, y sugiere algo útil. Sé conciso y escribe en español.',
+          },
+          {
+            role: 'user',
+            content: `Nota del usuario:\n\n${texto}`,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 512,
+        stream: false,
+      }),
+    });
+
+    if (!respuesta.ok) {
+      const errorTexto = await respuesta.text();
+      console.error('[Room IA] Error de API NVIDIA:', respuesta.status, errorTexto);
+      return { error: `API error ${respuesta.status}` };
+    }
+
+    const datos = await respuesta.json();
+    const contenido = datos.choices?.[0]?.message?.content || 'Sin respuesta de la IA';
+    return { contenido };
+  } catch (err) {
+    console.error('[Room IA] Error conectando con NVIDIA:', err);
+    return { error: err.message };
+  }
+}
+
+ipcMain.handle('ai-analyze-note', async (event, texto) => {
+  return await analizarConNemotron(texto);
+});

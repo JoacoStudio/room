@@ -558,14 +558,32 @@ function loadNote(index, focus = true) {
   }
 }
 
-function saveActive() {
+async function saveActive() {
   if (notes[activeIndex] && !isReadOnly) {
     notes[activeIndex].body = note.value;
     notes[activeIndex].updated = Date.now();
     saveNotes();
 
-    // 🧠 IA Local: analizar la nota que se acaba de guardar
+    // 🧠 IA Local: analizar la nota que se acaba de guardar (análisis rápido local)
     analizarNota(note.value);
+
+    // 🤖 Nemotron 3.5 Super VL 120B - Pensamiento profundo via NVIDIA NIM
+    try {
+      if (window.electronAPI && window.electronAPI.aiAPI) {
+        const resultado = await window.electronAPI.aiAPI.analyzeNote(note.value);
+        if (resultado.error) {
+          console.error('[Room IA Nemotron]', resultado.error);
+        } else {
+          console.log('\n╔═══════════════════════════════════════════════════════════════════════════════════════════╗');
+          console.log('║ 🤖  NEMOTRON 3.5 SUPER VL 120B - RESPUESTA DE LA IA                                   ║');
+          console.log('╠══════════════════════════════════════════════════════════════════════════════════════════╣');
+          console.log(`║ ${resultado.contenido}                                                               ║`);
+          console.log('╚═══════════════════════════════════════════════════════════════════════════════════════════╝\n');
+        }
+      }
+    } catch (err) {
+      console.error('[Room IA Nemotron] Error:', err);
+    }
   }
 }
 

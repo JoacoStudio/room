@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearPendingNotes: () => ipcRenderer.invoke('clipboard-clear-pending'),
     checkPendingNotes: () => ipcRenderer.invoke('clipboard-check-pending'),
     onClipboardNote: (callback) => ipcRenderer.on('clipboard-note-detected', (event, note) => callback(note))
+  },
+  aiAPI: {
+    analyzeNote: (texto) => ipcRenderer.invoke('ai-analyze-note', texto)
   }
 });
