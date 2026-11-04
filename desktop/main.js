@@ -132,8 +132,10 @@ app.whenReady().then(() => {
   const clipboardInterval = setInterval(() => {
     try {
       const text = clipboard.readText();
+      console.log('[Room] Monitoreando portapapeles:', text ? text.length + ' chars' : 'vacío');
+
       if (text && text.length > 50 && text !== lastClipboardText) {
-        console.log('[Room] Portapapeles detectado:', text.substring(0, 100));
+        console.log('[Room] Portapapeles detectado (>50 chars):', text.substring(0, 100));
         lastClipboardText = text;
 
         const notification = new Notification({
@@ -143,6 +145,7 @@ app.whenReady().then(() => {
         });
 
         notification.on('click', () => {
+          console.log('[Room] Usuario hizo clic en notificación');
           savePendingNote(text);
           if (win) {
             win.show();
@@ -152,6 +155,8 @@ app.whenReady().then(() => {
 
         notification.show();
         console.log('[Room] Notificación mostrada');
+      } else if (text && text.length <= 50) {
+        console.log('[Room] Texto demasiado corto:', text.length, 'chars');
       }
     } catch (e) {
       console.error('[Room] Error monitoreando portapapeles:', e);
