@@ -574,11 +574,7 @@ async function saveActive() {
         if (resultado.error) {
           console.error('[Room IA Nemotron]', resultado.error);
         } else {
-          console.log('\n╔═══════════════════════════════════════════════════════════════════════════════════════════╗');
-          console.log('║ 🤖  NEMOTRON 3.5 SUPER VL 120B - RESPUESTA DE LA IA                                   ║');
-          console.log('╠══════════════════════════════════════════════════════════════════════════════════════════╣');
-          console.log(`║ ${resultado.contenido}                                                               ║`);
-          console.log('╚═══════════════════════════════════════════════════════════════════════════════════════════╝\n');
+          console.log('\n🤖 Nemotron 3.5 Super VL 120B:', resultado.contenido, '\n');
         }
       }
     } catch (err) {
