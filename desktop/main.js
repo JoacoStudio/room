@@ -115,65 +115,72 @@ function createTray() {
   tray.on('click', toggleWindow);
 }
 
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  try {
+    console.log('[Room] Iniciando aplicación...');
+    createWindow();
+    console.log('[Room] Ventana creada');
 
-  // Atajo global único (funciona desde cualquier lugar de Windows)
-  const registeredZ = globalShortcut.register('Alt+Z', toggleWindow);
-  if (!registeredZ) {
-    console.log('[Room] No se pudo registrar el atajo Alt+Z');
-  } else {
-    console.log('[Room] Atajo global registrado: Alt+Z');
-  }
+    // Atajo global único (funciona desde cualquier lugar de Windows)
+    const registeredZ = globalShortcut.register('Alt+Z', toggleWindow);
+    if (!registeredZ) {
+      console.log('[Room] No se pudo registrar el atajo Alt+Z');
+    } else {
+      console.log('[Room] Atajo global registrado: Alt+Z');
+    }
 
-  createTray();
+    createTray();
+    console.log('[Room] Bandeja del sistema creada');
 
-  // Monitoreo de portapapeles cada 3 segundos
-  const clipboardInterval = setInterval(() => {
-    try {
-      const text = clipboard.readText();
-      console.log('[Room] Monitoreando portapapeles:', text ? text.length + ' chars' : 'vacío');
+    // Monitoreo de portapapeles cada 3 segundos
+    const clipboardInterval = setInterval(() => {
+      try {
+        const text = clipboard.readText();
+        console.log('[Room] Monitoreando portapapeles:', text ? text.length + ' chars' : 'vacío');
 
-      if (text && text.length > 50 && text !== lastClipboardText) {
-        console.log('[Room] Portapapeles detectado (>50 chars):', text.substring(0, 100));
-        lastClipboardText = text;
+        if (text && text.length > 50 && text !== lastClipboardText) {
+          console.log('[Room] Portapapeles detectado (>50 chars):', text.substring(0, 100));
+          lastClipboardText = text;
 
-        const notification = new Notification({
-          title: 'Room - Copiaste texto',
-          body: 'Haz clic para guardarlo como nota: ' + (text.length > 80 ? text.substring(0, 80) + '...' : text),
-          icon: path.join(__dirname, 'Ic.ico')
-        });
+          const notification = new Notification({
+            title: 'Room - Copiaste texto',
+            body: 'Haz clic para guardarlo como nota: ' + (text.length > 80 ? text.substring(0, 80) + '...' : text),
+            icon: path.join(__dirname, 'Ic.ico')
+          });
 
-        notification.on('click', () => {
-          console.log('[Room] Usuario hizo clic en notificación');
-          savePendingNote(text);
-          if (win) {
-            win.webContents.send('clipboard-note-detected', {
-              id: `clipboard-${Date.now()}`,
-              title: 'Portapapeles',
-              body: text,
-              updated: Date.now()
-            });
-            win.show();
-            win.focus();
-          }
-        });
+          notification.on('click', () => {
+            console.log('[Room] Usuario hizo clic en notificación');
+            savePendingNote(text);
+            if (win) {
+              win.webContents.send('clipboard-note-detected', {
+                id: `clipboard-${Date.now()}`,
+                title: 'Portapapeles',
+                body: text,
+                updated: Date.now()
+              });
+              win.show();
+              win.focus();
+            }
+          });
 
-        notification.show();
-        console.log('[Room] Notificación mostrada');
-      } else if (text && text.length <= 50) {
-        console.log('[Room] Texto demasiado corto:', text.length, 'chars');
+          notification.show();
+          console.log('[Room] Notificación mostrada');
+        } else if (text && text.length <= 50) {
+          console.log('[Room] Texto demasiado corto:', text.length, 'chars');
+        }
+      } catch (e) {
+        console.error('[Room] Error monitoreando portapapeles:', e);
       }
-    } catch (e) {
-      console.error('[Room] Error monitoreando portapapeles:', e);
-    }
-  }, 3000);
+    }, 3000);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  } catch (e) {
+    console.error('[Room] Error al iniciar:', e);
+  }
 });
 
 app.on('will-quit', () => {
