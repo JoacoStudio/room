@@ -7,7 +7,6 @@ let tray = null;
 let isQuitting = false;
 let lastClipboardText = '';
 const PENDING_FILE = path.join(__dirname, 'clipboard_notes.json');
-const clipboardInterval = null;
 
 function readPendingNotes() {
   try {
@@ -54,9 +53,10 @@ function createWindow() {
     }
   });
 
-  // index.html está en la misma carpeta (desktop/)
   const indexPath = path.join(__dirname, 'index.html');
-  win.loadFile(indexPath);
+  win.loadFile(indexPath).catch((err) => {
+    console.error('[Room] Error cargando index.html:', err);
+  });
 
   win.on('close', (e) => {
     if (process.platform === 'win32' && !isQuitting) {
@@ -78,7 +78,7 @@ function toggleWindow() {
     console.log('[Room] ventana existe, visible:', win.isVisible(), 'minimizada:', win.isMinimized());
     if (win.isMinimized()) {
       win.restore();
-      win.showInactive(); // restaurar sin animación de entrada ni robo de foco
+      win.showInactive();
     } else if (!win.isVisible()) {
       win.show();
     }
@@ -115,13 +115,12 @@ function createTray() {
   tray.on('click', toggleWindow);
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   try {
     console.log('[Room] Iniciando aplicación...');
     createWindow();
     console.log('[Room] Ventana creada');
 
-    // Atajo global único (funciona desde cualquier lugar de Windows)
     const registeredZ = globalShortcut.register('Alt+Z', toggleWindow);
     if (!registeredZ) {
       console.log('[Room] No se pudo registrar el atajo Alt+Z');
@@ -130,10 +129,8 @@ app.whenReady().then(async () => {
     }
 
     createTray();
-    console.log('[Room] Bandeja del sistema creada');
 
-    // Monitoreo de portapapeles cada 3 segundos
-    const clipboardInterval = setInterval(() => {
+    setInterval(() => {
       try {
         const text = clipboard.readText();
         console.log('[Room] Monitoreando portapapeles:', text ? text.length + ' chars' : 'vacío');
@@ -189,13 +186,10 @@ app.on('will-quit', () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // No salemos: mantenemos la app en segundo plano para que Alt+Z siga funcionando.
-    // Usá el ícono de bandeja > Salir para cerrar completamente.
+    // Mantenemos la app en segundo plano para que Alt+Z siga funcionando.
   }
 });
 
-// IPC: controles de ventana desde el renderer (puntos superiores en desktop)
-// VALIDACIÓN DE SEGURIDAD: solo acepta mensajes del webContents de Room
 function isValidIPCRequest(event) {
   if (!event || !event.sender) return false;
   const senderWindow = BrowserWindow.fromWebContents(event.sender);
