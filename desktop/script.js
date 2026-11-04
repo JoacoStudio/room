@@ -421,6 +421,60 @@ function checkArithmetic() {
   }
 }
 
+/* ---------- IA Local: Proceso de Thinking ---------- */
+
+function analizarNota(texto) {
+  if (!texto || texto.trim().length === 0) return;
+
+  const lineas = texto.split('\n').filter((l) => l.trim().length > 0);
+  const palabras = texto.trim().split(/\s+/).filter((p) => p.length > 0);
+  const caracteres = texto.length;
+
+  const palabrasClave = [
+    'importante',
+    'urgente',
+    'idea',
+    'proyecto',
+    'tarea',
+    'recordatorio',
+    'cita',
+    'dinero',
+    'viaje',
+    'reunión',
+    'comprar',
+    'necesito',
+  ];
+  const encontradas = palabrasClave.filter((p) => texto.toLowerCase().includes(p));
+
+  let tipo = 'corta';
+  if (palabras.length > 50) tipo = 'larga';
+  else if (palabras.length > 15) tipo = 'media';
+
+  console.log('\n╔═════════════════════════════════════════════════════════════╗');
+  console.log('║ 🧠  ROOM IA - PROCESO DE THINKING                          ║');
+  console.log('╠═════════════════════════════════════════════════════════════╣');
+  console.log(`║ 📝 Líneas detectadas: ${lineas.length}                            ║`);
+  console.log(`║ 🔤 Palabras: ${palabras.length}                                       ║`);
+  console.log(`║ 🔡 Caracteres: ${caracteres}                                      ║`);
+  console.log(`║ 📏 Longitud: ${tipo.padEnd(10)}                                   ║`);
+
+  if (encontradas.length > 0) {
+    console.log(`║ 🏷️  Palabras clave: ${encontradas.join(', ')}              ║`);
+  } else {
+    console.log(`║ 🏷️  Palabras clave: ninguna                                     ║`);
+  }
+
+  if (texto.toLowerCase().includes('reunión') || texto.toLowerCase().includes('llamada')) {
+    console.log(`║ 💡 Sugerencia: Parece una nota de reunión. ¿Agregar fecha y hora?           ║`);
+  } else if (texto.toLowerCase().includes('comprar') || texto.toLowerCase().includes('necesito')) {
+    console.log(`║ 💡 Sugerencia: Parece una lista de tareas. ¿Agregar a pendientes?           ║`);
+  } else {
+    console.log(`║ 💡 Sugerencia: Nota guardada. Puedes editarla en cualquier momento.           ║`);
+  }
+
+  console.log('╚═════════════════════════════════════════════════════════════╝\n');
+}
+
 /* ---------- Import / Export ---------- */
 
 function downloadBlob(blob, filename) {
@@ -509,6 +563,9 @@ function saveActive() {
     notes[activeIndex].body = note.value;
     notes[activeIndex].updated = Date.now();
     saveNotes();
+
+    // 🧠 IA Local: analizar la nota que se acaba de guardar
+    analizarNota(note.value);
   }
 }
 
