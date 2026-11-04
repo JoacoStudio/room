@@ -747,6 +747,22 @@ setTimeout(hideSplash, 1500);
 loadNotes();
 loadNote(getSavedIndex(), true);
 
+// Fusionar notas capturadas del portapapeles
+(async () => {
+  try {
+    if (window.electronAPI && window.electronAPI.clipboardAPI) {
+      const pending = await window.electronAPI.clipboardAPI.getPendingNotes();
+      if (pending && pending.length > 0) {
+        pending.forEach((n) => {
+          notes.push(n);
+        });
+        saveNotes();
+        showShortcutIndicator(`${pending.length} nota(s) del portapapeles`);
+      }
+    }
+  } catch (e) {}
+})();
+
 window.addEventListener('error', (e) => {
   console.error('Error global:', e.error);
   hideSplash();

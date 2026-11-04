@@ -1,9 +1,40 @@
-const { app, BrowserWindow, globalShortcut, Tray, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, nativeImage, ipcMain, clipboard, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let win = null;
 let tray = null;
 let isQuitting = false;
+let lastClipboardText = '';
+const PENDING_FILE = path.join(__dirname, 'clipboard_notes.json');
+
+function readPendingNotes() {
+  try {
+    if (fs.existsSync(PENDING_FILE)) {
+      const data = fs.readFileSync(PENDING_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {}
+  return [];
+}
+
+function writePendingNotes(notes) {
+  try {
+    fs.writeFileSync(PENDING_FILE, JSON.stringify(notes, null, 2));
+  } catch (e) {}
+}
+
+function savePendingNote(text) {
+  const notes = readPendingNotes();
+  notes.push({
+    id: `clipboard-${Date.now()}`,
+    title: 'Portapapeles',
+    body: text,
+    updated: Date.now(),
+    source: 'clipboard'
+  });
+  writePendingNotes(notes);
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -96,6 +127,28 @@ app.whenReady().then(() => {
 
   createTray();
 
+  // Monitoreo de portapapeles cada 3 segundos
+  setInterval(() => {
+    try {
+      const text = clipboard.readText();
+      if (text && text.length > 50 && text !== lastClipboardText) {
+        lastClipboardText = text;
+        dialog.showMessageBox(win, {
+          type: 'question',
+          title: 'Room - Portapapeles',
+          message: '¿Guardar este texto como nota?',
+          detail: text.substring(0, 300) + (text.length > 300 ? '...' : ''),
+          buttons: ['Guardar', 'Descartar'],
+          cancelId: 1
+        }).then((result) => {
+          if (result.response === 0) {
+            savePendingNote(text);
+          }
+        });
+      }
+    } catch (e) {}
+  }, 3000);
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -152,4 +205,14 @@ ipcMain.on('window-fullscreen', (event) => {
       senderWindow.setFullScreen(true);
     }
   }
+});
+
+ipcMain.handle('clipboard-get-pending', async () => {
+  const notes = readPendingNotes();
+  writePendingNotes([]);
+  return notes;
+});
+
+ipcMain.handle('clipboard-clear-pending', async () => {
+  writePendingNotes([]);
 });
